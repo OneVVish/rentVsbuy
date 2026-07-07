@@ -20,6 +20,7 @@ import {
   Landmark,
   LineChart as LineChartIcon,
   MapPin,
+  Presentation,
   Share2,
   Trophy,
 } from 'lucide-react'
@@ -239,21 +240,31 @@ export default function App() {
               it in the stock market and tracks a true 30-year net worth comparison.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleShare}
-            className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-400" /> Copied!
-              </>
-            ) : (
-              <>
-                <Share2 className="h-4 w-4" /> Share Scenario
-              </>
-            )}
-          </button>
+          <div className="flex flex-shrink-0 items-center gap-3">
+            <a
+              href={`${import.meta.env.BASE_URL}rent-vs-buy-pitch.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
+            >
+              <Presentation className="h-4 w-4" /> Pitch Deck
+            </a>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4 text-emerald-400" /> Copied!
+                </>
+              ) : (
+                <>
+                  <Share2 className="h-4 w-4" /> Share Scenario
+                </>
+              )}
+            </button>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr]">
