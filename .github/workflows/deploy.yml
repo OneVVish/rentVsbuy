@@ -22,7 +22,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      - name: Install dependencies
+        run: |
+          for i in 1 2 3; do
+            npm ci --no-audit --no-fund && exit 0
+            echo "npm ci failed (attempt $i/3), retrying in 5s..."
+            sleep 5
+          done
+          exit 1
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
