@@ -28,6 +28,7 @@ import { getCaliforniaDefaults } from './data/californiaZipDefaults.js'
 import { runSimulation } from './simulation.js'
 import { runMonteCarlo } from './monteCarlo.js'
 import { buildShareUrl, getStateFromUrl } from './shareState.js'
+import ScreenshotImport from './ScreenshotImport.jsx'
 
 function formatCurrency(value, compact = true) {
   if (compact) {
@@ -299,6 +300,9 @@ export default function App() {
                   </p>
                 )}
               </div>
+              <ScreenshotImport
+                onApply={(values) => setInputs((prev) => ({ ...prev, ...values }))}
+              />
               <Slider
                 label="Home Price"
                 value={inputs.homePrice}
