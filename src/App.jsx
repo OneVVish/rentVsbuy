@@ -152,24 +152,25 @@ const INVESTMENT_VEHICLES = {
     label: 'Stock Market Return',
     portfolioLabel: 'Stock Portfolio',
     defaultReturn: 7,
-    description: 'S&P 500, bootstrapped from real 1928–2025 annual returns in Monte Carlo mode.',
-    sourceLabel: '1928–2025 S&P 500 annual total returns (NYU Stern)',
+    description:
+      'S&P 500, bootstrapped from real 1987–2025 annual returns, matched to the same year\'s home-price movement, in Monte Carlo mode.',
+    sourceLabel: '1987–2025 S&P 500 annual total returns (NYU Stern), matched by year to home prices',
   },
   treasuries: {
     label: 'Treasury Bond Return',
     portfolioLabel: 'Treasury Portfolio',
     defaultReturn: 4.5,
     description:
-      '10-year U.S. Treasury bonds — steady and low-volatility, bootstrapped from real 1928–2025 returns.',
-    sourceLabel: '1928–2025 10-year U.S. Treasury bond annual returns (NYU Stern)',
+      '10-year U.S. Treasury bonds — steady and low-volatility, bootstrapped from real 1987–2025 returns matched by year to home prices.',
+    sourceLabel: '1987–2025 10-year U.S. Treasury bond annual returns (NYU Stern), matched by year to home prices',
   },
   gold: {
     label: 'Gold Return',
     portfolioLabel: 'Gold Portfolio',
     defaultReturn: 5,
     description:
-      'Gold price appreciation only (no yield) — historically choppier than stocks or bonds, bootstrapped from real 1972–2025 returns.',
-    sourceLabel: '1972–2025 gold price annual changes (NYU Stern)',
+      'Gold price appreciation only (no yield) — historically choppier than stocks or bonds, bootstrapped from real 1987–2025 returns matched by year to home prices.',
+    sourceLabel: '1987–2025 gold price annual changes (NYU Stern), matched by year to home prices',
   },
 }
 
@@ -648,12 +649,14 @@ export default function App() {
                     <span>Shaded bands show the 10th–90th percentile range.</span>
                   </div>
                   <p>
-                    The renter's returns are bootstrapped from{' '}
-                    {INVESTMENT_VEHICLES[inputs.investmentVehicle].sourceLabel} (re-centered to
-                    your {INVESTMENT_VEHICLES[inputs.investmentVehicle].label} slider); home
-                    appreciation is bootstrapped from the FRED Case-Shiller U.S. National Home
-                    Price Index, 1987–2025 (re-centered to your Home Appreciation slider). Each
-                    year is drawn independently — no mean-reversion.
+                    Each simulated year draws one real historical calendar year (1987–2025) and
+                    applies that same year's {INVESTMENT_VEHICLES[inputs.investmentVehicle].label}{' '}
+                    and home-price change together — so a simulated 2008 pairs the real
+                    stock/bond/gold return with the real Case-Shiller home-price drop from 2008,
+                    keeping downturns that historically hit both housing and investments together
+                    paired. Both are re-centered to your{' '}
+                    {INVESTMENT_VEHICLES[inputs.investmentVehicle].label} and Home Appreciation
+                    sliders respectively.
                   </p>
                 </div>
               )}

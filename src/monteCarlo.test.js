@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { runMonteCarlo } from './monteCarlo.js'
+import { runMonteCarlo, simulateTrial } from './monteCarlo.js'
 
 const baseInputs = {
   homePrice: 650000,
@@ -67,5 +67,41 @@ describe('runMonteCarlo', () => {
     const stockSpread = stocks.data[29].renterP90 - stocks.data[29].renterP10
     const treasurySpread = treasuries.data[29].renterP90 - treasuries.data[29].renterP10
     expect(treasurySpread).toBeLessThan(stockSpread)
+  })
+})
+
+function pearsonCorrelation(xs, ys) {
+  const n = xs.length
+  const meanX = xs.reduce((a, b) => a + b, 0) / n
+  const meanY = ys.reduce((a, b) => a + b, 0) / n
+  let cov = 0
+  let varX = 0
+  let varY = 0
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - meanX
+    const dy = ys[i] - meanY
+    cov += dx * dy
+    varX += dx * dx
+    varY += dy * dy
+  }
+  return cov / Math.sqrt(varX * varY)
+}
+
+describe('simulateTrial (correlated sampling)', () => {
+  it('correlates buyer and renter year-30 outcomes via matched-year sampling', () => {
+    // Large N keeps the correlation estimate stable — independent sampling
+    // would hover near 0 with sampling noise ~1/sqrt(N) ≈ 0.02 at N=2000, so
+    // this is a loose regression guard against reverting to independent
+    // draws, not an assertion of a specific correlation magnitude.
+    const N = 2000
+    const buyerFinal = []
+    const renterFinal = []
+    for (let i = 0; i < N; i++) {
+      const trial = simulateTrial(baseInputs)
+      const final = trial[trial.length - 1]
+      buyerFinal.push(final.buyerNetWorth)
+      renterFinal.push(final.renterNetWorth)
+    }
+    expect(pearsonCorrelation(buyerFinal, renterFinal)).toBeGreaterThan(0.1)
   })
 })

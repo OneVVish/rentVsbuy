@@ -17,19 +17,19 @@ const VEHICLE_LABELS = {
     portfolio: 'Stock Portfolio',
     name: 'Stock Market',
     returnLabel: 'Stock Market Return',
-    sourceLabel: '1928–2025 S&P 500 annual total returns',
+    sourceLabel: '1987–2025 S&P 500 annual total returns, matched by year to home prices',
   },
   treasuries: {
     portfolio: 'Treasury Portfolio',
     name: 'Treasury Bonds',
     returnLabel: 'Treasury Bond Return',
-    sourceLabel: '1928–2025 10-year U.S. Treasury bond annual returns',
+    sourceLabel: '1987–2025 10-year U.S. Treasury bond annual returns, matched by year to home prices',
   },
   gold: {
     portfolio: 'Gold Portfolio',
     name: 'Gold',
     returnLabel: 'Gold Return',
-    sourceLabel: '1972–2025 gold price annual changes',
+    sourceLabel: '1987–2025 gold price annual changes, matched by year to home prices',
   },
 }
 
@@ -149,8 +149,9 @@ export default function PrintReport({
           </h2>
           <p className="mb-3 text-sm">
             Buying wins in <strong>{Math.round(monteCarlo.buyerWinProbability * 100)}%</strong> of{' '}
-            {monteCarlo.trials} simulated 30-year scenarios, bootstrapped from real{' '}
-            {vehicle.sourceLabel} and the 1987–2025 FRED Case-Shiller home price index.
+            {monteCarlo.trials} simulated 30-year scenarios, bootstrapped from{' '}
+            {vehicle.sourceLabel}: each simulated year's {vehicle.name} return and Case-Shiller
+            home-price change come from the same actual calendar year.
           </p>
           <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
