@@ -1,0 +1,143 @@
+Build a "Hyper-Local Rent vs. Buy Opportunity Cost Calculator" React application.
+This file originally was the initial one-shot build prompt; it's now kept updated
+to describe the app's current, much-expanded feature set.
+
+TECH STACK:
+- React 18 + Vite 6
+- Tailwind CSS 3 for styling
+- Recharts 2 for data visualization
+- Lucide React for icons
+- Tesseract.js for client-side OCR (Zillow screenshot import)
+- Vitest for the test suite
+- Deployed as a static site to GitHub Pages via GitHub Actions (auto-deploy on
+  push to main; base path /rentVsbuy/)
+
+CORE CONCEPT & MATH LOGIC:
+Most calculators ignore the opportunity cost of the down payment. This calculator
+compares the 30-year net worth of a Buyer vs. a Renter who invests everything the
+buyer would have spent as a down payment, plus any month the buyer's costs exceed
+rent, in the market instead.
+
+1. Buyer math (src/simulation.js):
+   - Standard amortization formula for the monthly mortgage payment (P&I), tracked
+     month-by-month over 360 months alongside the remaining loan balance.
+   - Home value compounds annually at "Home Appreciation" %.
+   - Assessed value (the property-tax base) is tracked SEPARATELY from home value:
+     when the "CA Prop 13 Tax Cap" toggle is on, assessed-value growth is capped at
+     2%/year even if the home appreciates faster.
+   - Total Monthly Home Cost = Mortgage (P&I) + Property Tax (assessed value * rate
+     / 12) + Monthly HOA + Home Insurance/12 + Maintenance/12 - Itemized Tax
+     Savings (see below). Home insurance and maintenance each inflate annually at
+     their own configurable rate.
+   - Itemized federal/state tax deduction: each year, if (mortgage interest paid,
+     capped at the $750K mortgage-interest-debt limit) + (property tax paid,
+     capped at the $10K SALT cap) exceeds the standard deduction ($30K
+     married-filing-jointly / $15K single), the excess is deductible at the
+     effective marginal rate (federal marginal rate + state rate) — applied as a
+     one-year-lagged monthly credit against the following year's costs.
+   - On sale (computed for every year 1-30, not just year 30): net proceeds =
+     home value * (1 - selling cost %) - remaining loan balance - capital gains
+     tax. Capital gains tax applies to gains above the Section 121 home-sale
+     exclusion ($500K MFJ / $250K single), at the effective capital gains rate
+     (federal capital gains rate + state rate, since California taxes capital
+     gains as ordinary income).
+   - Buyer Net Worth = net sale proceeds if sold that year.
+
+2. Renter math (src/simulation.js):
+   - Starts by investing the down payment amount.
+   - Every month: monthlySavings = Total Monthly Home Cost - Current Monthly Rent.
+     If positive, that difference is added to the portfolio (and to cost basis);
+     if the buyer is cheaper that month, nothing is added.
+   - Rent inflates annually at "Rent Inflation" %.
+   - Portfolio compounds monthly at the selected investment vehicle's return
+     (converted from the annual rate slider to an effective monthly rate).
+   - Renter Net Worth = portfolio value - capital gains tax on (portfolio - cost
+     basis), at the effective capital gains rate.
+
+3. Monte Carlo mode (src/monteCarlo.js, src/data/correlatedHistoricalYears.js):
+   - Instead of a single deterministic path, runs 500 trials of the same 30-year
+     simulation. Each simulated year draws ONE real historical calendar year
+     (1987-2025) and uses that year's actual S&P 500 / Treasury / Gold return
+     AND that same year's actual Case-Shiller home-price change together — so a
+     simulated 2008 pairs the real stock crash with the real housing downturn,
+     preserving historical co-movement instead of shuffling them independently.
+   - Each sampled value is re-centered (`targetMean + (historicalValue -
+     seriesMean)`) so the simulated distribution's mean matches whatever the user
+     set on the Home Appreciation / investment-return slider, while keeping the
+     real historical variance, skew, and fat tails.
+   - Historical sources: S&P 500 and 10-year Treasury annual returns (NYU Stern /
+     Damodaran dataset), gold annual price changes (same dataset, 1972+), and
+     Case-Shiller home-price index changes (FRED) — the 1987-2025 window is set
+     by how far back Case-Shiller data goes.
+   - Produces, per year: P10/median/P90 net worth for both buyer and renter (for
+     a shaded fan chart) and the % of trials where the buyer ends up ahead at
+     year 30.
+
+UI REQUIREMENTS:
+Sleek, modern, single-page dark-themed dashboard, two main columns:
+
+1. Left side (Inputs), grouped into cards:
+   - "The Property": Property Address (free-text, display-only, shown on the PDF
+     report), ZIP Code (California — auto-fills Home Price / Monthly Rent /
+     Property Tax Rate when recognized, via 45 exact-city overrides + 20 regional
+     bands + a statewide fallback), an "Import from Zillow Screenshot" button
+     (OCR via Tesseract.js pulls price/rent/property tax/HOA from a pasted
+     screenshot, shown in a review modal before applying), Home Price, Monthly
+     Rent.
+   - "Homeownership Costs": Down Payment %, Mortgage Rate, Property Tax Rate,
+     Monthly HOA, Annual Home Insurance, Yearly Maintenance, Selling Costs.
+   - "Taxes": CA Prop 13 Tax Cap toggle, Itemize Mortgage & Property Tax
+     Deductions toggle, Federal Marginal Tax Rate, Federal Capital Gains Tax
+     Rate, State Tax Rate, Married Filing Jointly toggle.
+   - "Market Assumptions": Renter's Investment vehicle (stocks / treasuries /
+     gold — switching updates the return slider's label, description, and
+     default), the vehicle's Target Return %, Home Appreciation %, Rent
+     Inflation %, Insurance Inflation %, Maintenance Inflation %.
+   - All numeric inputs are HTML range sliders that update the chart in real
+     time; toggles are switch-style buttons.
+   - Header action buttons: Pitch Deck (link to a Marp-generated PDF deck),
+     Download PDF Report, Share Scenario (base64-encodes all inputs + chart view
+     into a URL, copies it to the clipboard — no backend), Save as My Defaults
+     (persists current inputs to localStorage), Reset to Defaults (restores
+     saved defaults, or the factory defaults if none saved — also clears ZIP
+     code, Property Address, and switches back to the Deterministic view).
+
+2. Right side (Visualization):
+   - A toggle between "Deterministic" and "Monte Carlo" views.
+   - Deterministic: a Recharts LineChart, 30 years on the X-axis, Net Worth in
+     dollars on the Y-axis, two lines ("Buying (Home Equity)" and "Renting
+     ({vehicle} Portfolio)"), with a reference line at the break-even year.
+     Above the chart: the exact "Break-Even Year", or "Renting Wins" if the
+     renter always leads, plus stat cards for the monthly P&I payment and each
+     side's year-30 net worth.
+   - Monte Carlo: a fan chart with shaded 10th-90th percentile bands and median
+     lines for both buyer and renter, plus the buyer win probability across 500
+     trials and a methodology caption explaining the matched-year sampling.
+
+ADDITIONAL DELIVERABLES BUILT ON TOP OF THE CORE APP:
+- PDF Report (src/PrintReport.jsx): a print-only, single-page layout (browser
+  print / "Download PDF Report") with a bottom-line summary, the 30-year chart,
+  the Monte Carlo chart and summary (if available), and a full two-column input
+  summary — shows the Property Address (or ZIP/region) in the header when set.
+- Google Sheets port (google-sheets/RentVsBuyCalculator.gs): a Google Apps
+  Script that builds a live-formula spreadsheet replica (Inputs, HistoricalData,
+  Deterministic, MonteCarlo_Draws, MonteCarlo_Trials, MonteCarlo tabs) — the full
+  500-trial Monte Carlo, using annual closed-form formulas (verified bit-exact
+  against the app) instead of a 360-row monthly loop, with random draws frozen
+  after each manual "Resample" so the sheet stays responsive. See
+  google-sheets/README.md for setup.
+- Pitch Deck (presentation/deck.md, rendered to public/rent-vs-buy-pitch.pdf via
+  Marp): problem statement, feature walkthrough, and roadmap.
+- Test suite (Vitest, `npm test`): covers the amortization formula, Monte Carlo
+  percentile/win-probability math, ZIP lookup matching, screenshot-import
+  parsing, share-URL encode/decode, user-defaults localStorage handling, and
+  currency formatting — runs in CI before every deploy.
+- CI/CD (.github/workflows/deploy.yml): on push to main, installs dependencies,
+  runs the test suite, builds with Vite, and deploys to GitHub Pages
+  (onevvish.github.io/rentVsbuy) — fully automatic, no manual deploy step.
+
+POSSIBLE NEXT STEPS (not yet built):
+- Support states beyond California (property tax rules, ZIP defaults).
+- Model PMI for down payments under 20%.
+- Rent-control caps as an alternative to a flat rent-inflation rate.
+- Upfront closing costs on the purchase side.
