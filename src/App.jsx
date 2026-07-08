@@ -21,6 +21,7 @@ import {
   LineChart as LineChartIcon,
   MapPin,
   Presentation,
+  Printer,
   Share2,
   Trophy,
 } from 'lucide-react'
@@ -29,22 +30,8 @@ import { runSimulation } from './simulation.js'
 import { runMonteCarlo } from './monteCarlo.js'
 import { buildShareUrl, getStateFromUrl } from './shareState.js'
 import ScreenshotImport from './ScreenshotImport.jsx'
-
-function formatCurrency(value, compact = true) {
-  if (compact) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(value)
-  }
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value)
-}
+import PrintReport from './PrintReport.jsx'
+import { formatCurrency } from './format.js'
 
 function Slider({ label, value, onChange, min, max, step, format, accent = '#6366f1', description }) {
   const pct = ((value - min) / (max - min)) * 100
@@ -151,12 +138,39 @@ const DEFAULT_INPUTS = {
   marginalTaxRate: 24,
   stateTaxRate: 9.3,
   stockReturn: 7,
+  investmentVehicle: 'stocks',
   homeAppreciation: 3.5,
   rentInflation: 3,
   insuranceInflation: 4,
   maintenanceInflation: 3,
   capitalGainsTaxRate: 15,
   marriedFilingJointly: true,
+}
+
+const INVESTMENT_VEHICLES = {
+  stocks: {
+    label: 'Stock Market Return',
+    portfolioLabel: 'Stock Portfolio',
+    defaultReturn: 7,
+    description: 'S&P 500, bootstrapped from real 1928–2025 annual returns in Monte Carlo mode.',
+    sourceLabel: '1928–2025 S&P 500 annual total returns (NYU Stern)',
+  },
+  treasuries: {
+    label: 'Treasury Bond Return',
+    portfolioLabel: 'Treasury Portfolio',
+    defaultReturn: 4.5,
+    description:
+      '10-year U.S. Treasury bonds — steady and low-volatility, bootstrapped from real 1928–2025 returns.',
+    sourceLabel: '1928–2025 10-year U.S. Treasury bond annual returns (NYU Stern)',
+  },
+  gold: {
+    label: 'Gold Return',
+    portfolioLabel: 'Gold Portfolio',
+    defaultReturn: 5,
+    description:
+      'Gold price appreciation only (no yield) — historically choppier than stocks or bonds, bootstrapped from real 1972–2025 returns.',
+    sourceLabel: '1972–2025 gold price annual changes (NYU Stern)',
+  },
 }
 
 // Read once at module load — a shared link's inputs/chartView seed the initial state below.
@@ -180,6 +194,13 @@ export default function App() {
   }, [zipMatch])
 
   const setField = (key) => (value) => setInputs((prev) => ({ ...prev, [key]: value }))
+
+  const handleVehicleChange = (vehicle) =>
+    setInputs((prev) => ({
+      ...prev,
+      investmentVehicle: vehicle,
+      stockReturn: INVESTMENT_VEHICLES[vehicle].defaultReturn,
+    }))
 
   const { data, mortgagePayment, downPayment, breakEvenYear } = useMemo(
     () => runSimulation(inputs),
@@ -226,7 +247,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="no-print mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
@@ -250,6 +271,17 @@ export default function App() {
             >
               <Presentation className="h-4 w-4" /> Pitch Deck
             </a>
+            <button
+              type="button"
+              onClick={() => {
+                // Nudge the hidden report's charts to remeasure before print layout kicks in.
+                window.dispatchEvent(new Event('resize'))
+                window.print()
+              }}
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
+            >
+              <Printer className="h-4 w-4" /> Download PDF Report
+            </button>
             <button
               type="button"
               onClick={handleShare}
@@ -441,8 +473,29 @@ export default function App() {
             </SectionCard>
 
             <SectionCard icon={LineChartIcon} title="Market Assumptions">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-300">
+                  Renter's Investment
+                </label>
+                <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5 text-xs">
+                  {Object.entries(INVESTMENT_VEHICLES).map(([key, vehicle]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleVehicleChange(key)}
+                      className={`flex-1 rounded-md px-3 py-1.5 font-medium capitalize transition ${
+                        inputs.investmentVehicle === key
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Slider
-                label="Stock Market Return"
+                label={INVESTMENT_VEHICLES[inputs.investmentVehicle].label}
                 value={inputs.stockReturn}
                 onChange={setField('stockReturn')}
                 min={0}
@@ -450,6 +503,7 @@ export default function App() {
                 step={0.1}
                 format={(v) => `${v.toFixed(1)}%`}
                 accent="#34d399"
+                description={INVESTMENT_VEHICLES[inputs.investmentVehicle].description}
               />
               <Slider
                 label="Home Appreciation"
@@ -594,8 +648,9 @@ export default function App() {
                     <span>Shaded bands show the 10th–90th percentile range.</span>
                   </div>
                   <p>
-                    Stock returns are bootstrapped from actual 1928–2025 S&amp;P 500 annual total
-                    returns (NYU Stern, re-centered to your Stock Market Return slider); home
+                    The renter's returns are bootstrapped from{' '}
+                    {INVESTMENT_VEHICLES[inputs.investmentVehicle].sourceLabel} (re-centered to
+                    your {INVESTMENT_VEHICLES[inputs.investmentVehicle].label} slider); home
                     appreciation is bootstrapped from the FRED Case-Shiller U.S. National Home
                     Price Index, 1987–2025 (re-centered to your Home Appreciation slider). Each
                     year is drawn independently — no mean-reversion.
@@ -655,7 +710,7 @@ export default function App() {
                       <Line
                         type="monotone"
                         dataKey="renterNetWorth"
-                        name="Renting (Stock Portfolio)"
+                        name={`Renting (${INVESTMENT_VEHICLES[inputs.investmentVehicle].portfolioLabel})`}
                         stroke="#34d399"
                         strokeWidth={2.5}
                         dot={false}
@@ -748,6 +803,18 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      <PrintReport
+        inputs={inputs}
+        data={data}
+        mortgagePayment={mortgagePayment}
+        downPayment={downPayment}
+        breakEvenYear={breakEvenYear}
+        finalYear={finalYear}
+        zipCode={zipCode}
+        zipMatch={zipMatch}
+        monteCarlo={monteCarlo}
+      />
     </div>
   )
 }

@@ -12,22 +12,36 @@ import {
 } from './simulation.js'
 import { SP500_ANNUAL_RETURNS, SP500_MEAN_RETURN } from './data/sp500HistoricalReturns.js'
 import {
+  TREASURY_ANNUAL_RETURNS,
+  TREASURY_MEAN_RETURN,
+} from './data/treasuryHistoricalReturns.js'
+import { GOLD_ANNUAL_RETURNS, GOLD_MEAN_RETURN } from './data/goldHistoricalReturns.js'
+import {
   HOME_PRICE_ANNUAL_CHANGES,
   HOME_PRICE_MEAN_CHANGE,
 } from './data/homePriceHistoricalAppreciation.js'
 
 export const MC_TRIALS = 500
 
+const RENTER_RETURN_SERIES = {
+  stocks: [SP500_ANNUAL_RETURNS, SP500_MEAN_RETURN],
+  treasuries: [TREASURY_ANNUAL_RETURNS, TREASURY_MEAN_RETURN],
+  gold: [GOLD_ANNUAL_RETURNS, GOLD_MEAN_RETURN],
+}
+
 function bootstrapRecentered(series, seriesMean, targetMean) {
   const historical = series[Math.floor(Math.random() * series.length)]
   return targetMean + (historical - seriesMean)
 }
 
-// Bootstrap an annual return from real 1928-2025 S&P 500 history, re-centered
-// so the sampled distribution's mean matches the user's assumed rate — this keeps
-// the actual historical variance/skew/fat-tails while still respecting the slider.
-function sampleHistoricalStockReturn(targetMean) {
-  return bootstrapRecentered(SP500_ANNUAL_RETURNS, SP500_MEAN_RETURN, targetMean)
+// Bootstrap an annual return from the renter's chosen investment vehicle's real
+// history (S&P 500 1928-2025, 10-year Treasury bonds 1928-2025, or gold
+// 1972-2025), re-centered so the sampled distribution's mean matches the
+// user's assumed rate — this keeps the actual historical variance/skew/fat-tails
+// while still respecting the slider.
+function sampleHistoricalStockReturn(targetMean, investmentVehicle) {
+  const [series, seriesMean] = RENTER_RETURN_SERIES[investmentVehicle] ?? RENTER_RETURN_SERIES.stocks
+  return bootstrapRecentered(series, seriesMean, targetMean)
 }
 
 // Same bootstrap approach, using the FRED Case-Shiller-derived 1987-2025 U.S.
@@ -61,6 +75,7 @@ function simulateTrial(inputs) {
     marginalTaxRate,
     stateTaxRate,
     stockReturn,
+    investmentVehicle,
     homeAppreciation,
     rentInflation,
     insuranceInflation,
@@ -90,7 +105,7 @@ function simulateTrial(inputs) {
   let yearInterestPaid = 0
   let yearPropertyTaxPaid = 0
   let monthlyItemizedSavings = 0
-  let monthlyStockReturn = Math.pow(1 + sampleHistoricalStockReturn(stockReturn) / 100, 1 / 12) - 1
+  let monthlyStockReturn = Math.pow(1 + sampleHistoricalStockReturn(stockReturn, investmentVehicle) / 100, 1 / 12) - 1
 
   const yearly = []
 
@@ -116,7 +131,7 @@ function simulateTrial(inputs) {
       rent *= 1 + rentInflation / 100
       homeInsurance *= 1 + insuranceInflation / 100
       maintenance *= 1 + maintenanceInflation / 100
-      monthlyStockReturn = Math.pow(1 + sampleHistoricalStockReturn(stockReturn) / 100, 1 / 12) - 1
+      monthlyStockReturn = Math.pow(1 + sampleHistoricalStockReturn(stockReturn, investmentVehicle) / 100, 1 / 12) - 1
     }
 
     const interestPayment = loanBalance * monthlyMortgageRate

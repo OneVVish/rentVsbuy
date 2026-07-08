@@ -56,3 +56,23 @@ input[type='range']::-moz-range-progress {
   border-radius: 9999px;
   background: var(--track-color, #6366f1);
 }
+
+/* The PDF report is rendered off-screen at all times, and only shown (in
+   place of the interactive dashboard) when the browser's print dialog opens. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  body,
+  .min-h-screen {
+    background: #ffffff !important;
+    min-height: 0 !important;
+  }
+}
