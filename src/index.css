@@ -57,10 +57,15 @@ input[type='range']::-moz-range-progress {
   background: var(--track-color, #6366f1);
 }
 
-/* The PDF report is rendered off-screen at all times, and only shown (in
-   place of the interactive dashboard) when the browser's print dialog opens. */
+/* The PDF report is kept in normal (non-display:none) layout at all times, just
+   positioned off-screen, so Recharts' ResizeObserver-based charts always have
+   real dimensions to measure and render against — display:none would give them
+   a 0x0 box that some browsers fail to properly re-measure once print starts. */
 .print-only {
-  display: none;
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  width: 800px;
 }
 
 @media print {
@@ -68,7 +73,9 @@ input[type='range']::-moz-range-progress {
     display: none !important;
   }
   .print-only {
-    display: block !important;
+    position: static;
+    left: auto;
+    width: auto;
   }
   body,
   .min-h-screen {

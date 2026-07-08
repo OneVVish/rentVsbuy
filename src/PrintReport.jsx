@@ -1,5 +1,7 @@
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -11,13 +13,24 @@ import {
 import { formatCurrency } from './format.js'
 
 const VEHICLE_LABELS = {
-  stocks: { portfolio: 'Stock Portfolio', name: 'Stock Market', returnLabel: 'Stock Market Return' },
+  stocks: {
+    portfolio: 'Stock Portfolio',
+    name: 'Stock Market',
+    returnLabel: 'Stock Market Return',
+    sourceLabel: '1928–2025 S&P 500 annual total returns',
+  },
   treasuries: {
     portfolio: 'Treasury Portfolio',
     name: 'Treasury Bonds',
     returnLabel: 'Treasury Bond Return',
+    sourceLabel: '1928–2025 10-year U.S. Treasury bond annual returns',
   },
-  gold: { portfolio: 'Gold Portfolio', name: 'Gold', returnLabel: 'Gold Return' },
+  gold: {
+    portfolio: 'Gold Portfolio',
+    name: 'Gold',
+    returnLabel: 'Gold Return',
+    sourceLabel: '1972–2025 gold price annual changes',
+  },
 }
 
 function InputRow({ label, value }) {
@@ -130,15 +143,88 @@ export default function PrintReport({
       </section>
 
       {monteCarlo && (
-        <section className="mb-6">
+        <section className="mb-6" style={{ breakInside: 'avoid' }}>
           <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">
             Monte Carlo Simulation
           </h2>
-          <p className="text-sm">
+          <p className="mb-3 text-sm">
             Buying wins in <strong>{Math.round(monteCarlo.buyerWinProbability * 100)}%</strong> of{' '}
-            {monteCarlo.trials} simulated 30-year scenarios, bootstrapped from real 1928–2025 S&amp;P
-            500 returns and the 1987–2025 FRED Case-Shiller home price index.
+            {monteCarlo.trials} simulated 30-year scenarios, bootstrapped from real{' '}
+            {vehicle.sourceLabel} and the 1987–2025 FRED Case-Shiller home price index.
           </p>
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={monteCarlo.data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="year" stroke="#475569" tick={{ fill: '#475569', fontSize: 11 }} />
+                <YAxis
+                  stroke="#475569"
+                  tick={{ fill: '#475569', fontSize: 11 }}
+                  tickFormatter={(v) => formatCurrency(v)}
+                  width={65}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 12 }}
+                  payload={[
+                    { value: 'Buying (median, 10th–90th pct)', type: 'line', color: '#6366f1' },
+                    { value: `Renting (median, ${vehicle.portfolio})`, type: 'line', color: '#10b981' },
+                  ]}
+                />
+                <Area
+                  dataKey="buyerLow"
+                  stackId="buyer"
+                  stroke="none"
+                  fill="transparent"
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+                <Area
+                  dataKey="buyerRange"
+                  stackId="buyer"
+                  stroke="none"
+                  fill="#6366f1"
+                  fillOpacity={0.15}
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+                <Area
+                  dataKey="renterLow"
+                  stackId="renter"
+                  stroke="none"
+                  fill="transparent"
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+                <Area
+                  dataKey="renterRange"
+                  stackId="renter"
+                  stroke="none"
+                  fill="#10b981"
+                  fillOpacity={0.15}
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="buyerMedian"
+                  stroke="#6366f1"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="renterMedian"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         </section>
       )}
 
