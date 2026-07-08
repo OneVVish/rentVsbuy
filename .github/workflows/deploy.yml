@@ -30,6 +30,7 @@ jobs:
             sleep 5
           done
           exit 1
+      - run: npm test
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
