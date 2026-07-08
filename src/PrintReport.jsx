@@ -51,6 +51,7 @@ export default function PrintReport({
   finalYear,
   zipCode,
   zipMatch,
+  propertyAddress,
   monteCarlo,
 }) {
   const buyerWinsAt30 = finalYear && finalYear.buyerNetWorth > finalYear.renterNetWorth
@@ -67,7 +68,11 @@ export default function PrintReport({
         <h1 className="text-2xl font-bold">Hyper-Local Rent vs. Buy Opportunity Cost Report</h1>
         <p className="mt-1 text-sm text-slate-500">
           Generated {generatedOn}
-          {zipCode && zipMatch ? ` — ${zipMatch.label} (${zipCode})` : ''}
+          {propertyAddress
+            ? ` — ${propertyAddress}`
+            : zipCode && zipMatch
+              ? ` — ${zipMatch.label} (${zipCode})`
+              : ''}
         </p>
       </header>
 

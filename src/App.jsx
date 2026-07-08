@@ -22,6 +22,8 @@ import {
   MapPin,
   Presentation,
   Printer,
+  RotateCcw,
+  Save,
   Share2,
   Trophy,
 } from 'lucide-react'
@@ -29,6 +31,7 @@ import { getCaliforniaDefaults } from './data/californiaZipDefaults.js'
 import { runSimulation } from './simulation.js'
 import { runMonteCarlo } from './monteCarlo.js'
 import { buildShareUrl, getStateFromUrl } from './shareState.js'
+import { loadUserDefaults, saveUserDefaults } from './userDefaults.js'
 import ScreenshotImport from './ScreenshotImport.jsx'
 import PrintReport from './PrintReport.jsx'
 import { formatCurrency } from './format.js'
@@ -180,8 +183,10 @@ const sharedState = getStateFromUrl()
 export default function App() {
   const [inputs, setInputs] = useState(() => ({ ...DEFAULT_INPUTS, ...sharedState?.inputs }))
   const [copied, setCopied] = useState(false)
+  const [savedDefaults, setSavedDefaults] = useState(false)
 
   const [zipCode, setZipCode] = useState('')
+  const [propertyAddress, setPropertyAddress] = useState('')
   const zipMatch = useMemo(() => getCaliforniaDefaults(zipCode), [zipCode])
 
   useEffect(() => {
@@ -246,6 +251,19 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleSaveDefaults = () => {
+    saveUserDefaults(inputs)
+    setSavedDefaults(true)
+    setTimeout(() => setSavedDefaults(false), 2000)
+  }
+
+  const handleResetToDefaults = () => {
+    setInputs({ ...DEFAULT_INPUTS, ...loadUserDefaults() })
+    setZipCode('')
+    setPropertyAddress('')
+    setChartView('deterministic')
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="no-print mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -298,6 +316,29 @@ export default function App() {
                 </>
               )}
             </button>
+            <button
+              type="button"
+              onClick={handleSaveDefaults}
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
+            >
+              {savedDefaults ? (
+                <>
+                  <Check className="h-4 w-4 text-emerald-400" /> Saved!
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" /> Save as My Defaults
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleResetToDefaults}
+              title="Resets all inputs to your saved defaults (or the built-in defaults if none are saved)"
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
+            >
+              <RotateCcw className="h-4 w-4" /> Reset to Defaults
+            </button>
           </div>
         </header>
 
@@ -305,6 +346,18 @@ export default function App() {
           {/* Inputs */}
           <div className="space-y-5">
             <SectionCard icon={Home} title="The Property">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-300">
+                  Property Address
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 123 Main St, San Jose, CA 95123"
+                  value={propertyAddress}
+                  onChange={(e) => setPropertyAddress(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-indigo-400 focus:outline-none"
+                />
+              </div>
               <div>
                 <div className="mb-1.5 flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5 text-slate-400" />
@@ -816,6 +869,7 @@ export default function App() {
         finalYear={finalYear}
         zipCode={zipCode}
         zipMatch={zipMatch}
+        propertyAddress={propertyAddress}
         monteCarlo={monteCarlo}
       />
     </div>
