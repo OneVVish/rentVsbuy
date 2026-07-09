@@ -766,7 +766,10 @@ export default function App() {
                     ordinary capital-gains rates on any gain beyond that — with no
                     primary-residence exclusion, since this is a rental property. Rental losses are
                     assumed fully deductible against other income each year; real
-                    passive-activity-loss limits and tenant turnover costs aren't modeled.
+                    passive-activity-loss limits and tenant turnover costs aren't modeled. Months
+                    where the rental runs a cash-flow deficit draw down the Invested Surplus
+                    (below) rather than coming from an untracked outside source — the same rule
+                    applies to the Renter path whenever rent costs more than buying that month.
                     {landlordSubView === 'cashflow' &&
                       ' Cash flow is net of the tax effect above, including its one-year lag.'}
                     {landlordSubView === 'breakdown' &&

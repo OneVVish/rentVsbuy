@@ -160,8 +160,11 @@ export function simulateTrial(inputs) {
 
     portfolio *= 1 + monthlyStockReturn
     const monthlySavings = totalMonthlyHomeCost - rent
+    // Applied unconditionally — see the matching comment in simulation.js. If
+    // renting costs more than buying that month, the shortfall draws down the
+    // invested portfolio rather than vanishing into an untracked outside source.
+    portfolio += monthlySavings
     if (monthlySavings > 0) {
-      portfolio += monthlySavings
       costBasis += monthlySavings
     }
 

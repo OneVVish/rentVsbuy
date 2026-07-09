@@ -188,14 +188,23 @@ describe('runSimulation', () => {
       expect(Number.isFinite(data[29].landlordNetWorth)).toBe(true)
     })
 
-    it('does not change buyer or renter net worth (regression guard)', () => {
+    it('does not change buyer net worth (regression guard — buyer never touches a portfolio)', () => {
       const { data } = runSimulation(baseInputs)
       expect(data[0].buyerNetWorth).toBe(90312)
-      expect(data[0].renterNetWorth).toBe(157564)
       expect(data[14].buyerNetWorth).toBe(601193)
-      expect(data[14].renterNetWorth).toBe(596809)
       expect(data[29].buyerNetWorth).toBe(1520423)
-      expect(data[29].renterNetWorth).toBe(1550453)
+    })
+
+    it('draws down the renter portfolio once rising rent overtakes the (fixed-payment) buyer cost', () => {
+      const { data } = runSimulation(baseInputs)
+      // Years 1 and 15: rent is still cheaper than the buyer's cost every month,
+      // so behavior is unchanged from before renter withdrawals were modeled.
+      expect(data[0].renterNetWorth).toBe(157564)
+      expect(data[14].renterNetWorth).toBe(596809)
+      // By year 30, rent (inflating every year) has overtaken the buyer's mostly-
+      // fixed monthly cost, so the shortfall now draws down the renter's
+      // portfolio — netting less than before this was modeled (was 1550453).
+      expect(data[29].renterNetWorth).toBe(1492770)
     })
 
     describe('cash flow and equity/investment breakdown', () => {
@@ -208,11 +217,11 @@ describe('runSimulation', () => {
         }
       })
 
-      it('does not change landlordNetWorth itself (regression guard on the decomposition refactor)', () => {
+      it('matches the current expected landlordNetWorth baseline (snapshot regression guard)', () => {
         const { data } = runSimulation(baseInputs)
-        expect(data[0].landlordNetWorth).toBe(227201)
-        expect(data[14].landlordNetWorth).toBe(727187)
-        expect(data[29].landlordNetWorth).toBe(2023345)
+        expect(data[0].landlordNetWorth).toBe(208581)
+        expect(data[14].landlordNetWorth).toBe(577380)
+        expect(data[29].landlordNetWorth).toBe(1595273)
       })
 
       it('reports negative cash flow in year 1 and improves as rent inflates', () => {

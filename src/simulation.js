@@ -177,8 +177,13 @@ export function runSimulation(inputs) {
 
     portfolio *= 1 + monthlyStockReturn
     const monthlySavings = totalMonthlyHomeCost - rent
+    // Applied unconditionally — if renting costs more than buying that month, the
+    // shortfall is assumed to come out of the same invested pot (at the same
+    // opportunity-cost rate as a contribution would have earned), not from some
+    // untracked outside source. Cost basis only grows on a real contribution;
+    // withdrawals don't reduce it (no realized-loss accounting on withdrawal).
+    portfolio += monthlySavings
     if (monthlySavings > 0) {
-      portfolio += monthlySavings
       costBasis += monthlySavings
     }
 
@@ -197,12 +202,15 @@ export function runSimulation(inputs) {
     const totalMonthlyOwnerCosts = mortgagePayment + monthlyPropertyTax + monthlyOwnerCosts + managementFee
     landlordPortfolio *= 1 + monthlyStockReturn
     const landlordMonthlySavings = collectedRent - totalMonthlyOwnerCosts - monthlyLandlordTaxEffect
-    // Unconditional — unlike the portfolio contribution below, this tracks the
-    // landlord's actual cash flow whether positive or negative, for the Cash
-    // Flow chart.
+    // Tracks the landlord's actual cash flow whether positive or negative, for
+    // the Cash Flow chart.
     yearLandlordCashFlow += landlordMonthlySavings
+    // Applied unconditionally, same reasoning as the renter's portfolio above —
+    // a cash-flow shortfall draws down the invested surplus (at the same
+    // opportunity-cost rate) rather than vanishing into an untracked outside
+    // source. Cost basis only grows on a real contribution.
+    landlordPortfolio += landlordMonthlySavings
     if (landlordMonthlySavings > 0) {
-      landlordPortfolio += landlordMonthlySavings
       landlordCostBasis += landlordMonthlySavings
     }
 
