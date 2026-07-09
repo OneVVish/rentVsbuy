@@ -207,6 +207,13 @@ describe('runSimulation', () => {
       expect(data[29].renterNetWorth).toBe(1492770)
     })
 
+    it('reports renterCashFlow directly, flipping from positive to negative as rent overtakes the buyer cost', () => {
+      const { data } = runSimulation(baseInputs)
+      expect(data.every((d) => Number.isFinite(d.renterCashFlow))).toBe(true)
+      expect(data[0].renterCashFlow).toBeGreaterThan(0)
+      expect(data[29].renterCashFlow).toBeLessThan(0)
+    })
+
     describe('cash flow and equity/investment breakdown', () => {
       it('partitions net worth into property equity + invested surplus (within $1 rounding)', () => {
         const { data } = runSimulation(baseInputs)

@@ -110,6 +110,7 @@ export function runSimulation(inputs) {
   let yearOwnerCosts = 0
   let yearManagementFeePaid = 0
   let yearLandlordCashFlow = 0
+  let yearRenterCashFlow = 0
 
   const data = []
 
@@ -183,6 +184,9 @@ export function runSimulation(inputs) {
 
     portfolio *= 1 + monthlyStockReturn
     const monthlySavings = totalMonthlyHomeCost - rent
+    // Tracks the renter's actual monthly delta whether positive or negative, for
+    // the Cash Flow chart — mirrors yearLandlordCashFlow below.
+    yearRenterCashFlow += monthlySavings
     // Applied unconditionally — if renting costs more than buying that month, the
     // shortfall is assumed to come out of the same invested pot (at the same
     // opportunity-cost rate as a contribution would have earned), not from some
@@ -263,6 +267,7 @@ export function runSimulation(inputs) {
         year,
         buyerNetWorth: Math.round(netSaleProceeds),
         renterNetWorth: Math.round(portfolio - capitalGainsTax),
+        renterCashFlow: Math.round(yearRenterCashFlow),
         landlordNetWorth: Math.round(landlordNetWorth),
         landlordCashFlow: Math.round(yearLandlordCashFlow),
         landlordPropertyEquity: Math.round(landlordPropertyEquity),
@@ -271,6 +276,7 @@ export function runSimulation(inputs) {
         monthlyRent: Math.round(rent),
       })
       yearLandlordCashFlow = 0
+      yearRenterCashFlow = 0
     }
   }
 

@@ -20,6 +20,7 @@ import {
   Building2,
   Check,
   Home,
+  Info,
   KeyRound,
   Landmark,
   LineChart as LineChartIcon,
@@ -100,10 +101,24 @@ function SectionCard({ icon: Icon, title, children }) {
   )
 }
 
-function StatCard({ label, value, accentClass }) {
+function InfoTooltip({ text }) {
+  return (
+    <span className="group relative inline-flex">
+      <Info className="h-3.5 w-3.5 cursor-help text-slate-500 hover:text-slate-300" />
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-60 -translate-x-1/2 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-normal leading-relaxed text-slate-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+        {text}
+      </span>
+    </span>
+  )
+}
+
+function StatCard({ label, value, accentClass, tooltip }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-      <p className="text-xs text-slate-400">{label}</p>
+      <p className="flex items-center gap-1 text-xs text-slate-400">
+        {label}
+        {tooltip && <InfoTooltip text={tooltip} />}
+      </p>
       <p className={`text-lg font-bold tabular-nums ${accentClass}`}>{value}</p>
     </div>
   )
@@ -227,6 +242,9 @@ export default function App() {
   // Sub-view within the "Buy & Rent Out" tab only — not persisted via Share
   // Scenario/Save Defaults, since it's a viewing preference, not an input.
   const [landlordSubView, setLandlordSubView] = useState('networth')
+  // Same idea, independent of landlordSubView so switching tabs doesn't carry a
+  // sub-view choice from one into an unrelated one.
+  const [deterministicSubView, setDeterministicSubView] = useState('networth')
 
   // Monte Carlo runs 500 trials of a 30-year monthly simulation, so re-running it on every
   // slider-drag tick would jank the UI. Debounce it and let the deterministic view (cheap)
@@ -705,17 +723,20 @@ export default function App() {
                   label={`Buyer Net Worth (Yr 30)${isMonteCarlo ? ', median' : ''}`}
                   value={displayBuyerNetWorth != null ? formatCurrency(displayBuyerNetWorth, false) : '-'}
                   accentClass={buyerWinsAt30 ? 'text-indigo-400' : 'text-slate-300'}
+                  tooltip="Home value minus the remaining mortgage balance, minus capital gains tax if sold that year (skipped if Never Sell is on)."
                 />
                 <StatCard
                   label={`Renter Net Worth (Yr 30)${isMonteCarlo ? ', median' : ''}`}
                   value={displayRenterNetWorth != null ? formatCurrency(displayRenterNetWorth, false) : '-'}
                   accentClass={!buyerWinsAt30 ? 'text-emerald-400' : 'text-slate-300'}
+                  tooltip="Your down payment invested from day one, plus every month's difference between the buyer's cost and rent — invested when buying costs more, drawn down (at the same rate) when rent costs more — minus capital gains tax (skipped if Never Sell is on)."
                 />
                 {chartView === 'landlord' && (
                   <StatCard
                     label="Buy & Rent Out Net Worth (Yr 30)"
                     value={finalYear ? formatCurrency(finalYear.landlordNetWorth, false) : '-'}
                     accentClass="text-pink-400"
+                    tooltip="Property Equity (home value minus mortgage, after sale tax) plus Invested Surplus (accumulated rental cash flow, positive or negative, compounded) — see the Cash Flow and Equity vs Investment views for the breakdown."
                   />
                 )}
               </div>
@@ -760,6 +781,43 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {chartView === 'deterministic' && (
+                <div className="mb-3 text-xs text-slate-400">
+                  {deterministicSubView === 'cashflow' && (
+                    <p>
+                      Each year's total difference between the buyer's monthly cost and rent.
+                      Positive means buying cost more that month, so the difference got invested;
+                      negative means rent cost more, and that shortfall was drawn from the same
+                      portfolio instead of an untracked outside source.
+                    </p>
+                  )}
+                  <div className="mt-2 inline-flex rounded-lg border border-slate-700 bg-slate-950 p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setDeterministicSubView('networth')}
+                      className={`rounded-md px-2.5 py-1 font-medium transition ${
+                        deterministicSubView === 'networth'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Net Worth
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeterministicSubView('cashflow')}
+                      className={`rounded-md px-2.5 py-1 font-medium transition ${
+                        deterministicSubView === 'cashflow'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Cash Flow
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {chartView === 'landlord' && (
                 <div className="mb-3 text-xs text-slate-400">
@@ -856,7 +914,39 @@ export default function App() {
                 }`}
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  {chartView === 'landlord' && landlordSubView === 'cashflow' ? (
+                  {chartView === 'deterministic' && deterministicSubView === 'cashflow' ? (
+                    <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis
+                        dataKey="year"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        label={{ value: 'Years', position: 'insideBottom', offset: -3, fill: '#64748b' }}
+                      />
+                      <YAxis
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        tickFormatter={(v) => formatCurrency(v)}
+                        width={70}
+                      />
+                      <Tooltip
+                        formatter={tooltipFormatter}
+                        labelFormatter={(year) => `Year ${year}`}
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '0.75rem',
+                          color: '#e2e8f0',
+                        }}
+                      />
+                      <ReferenceLine y={0} stroke="#475569" />
+                      <Bar dataKey="renterCashFlow" name="Renter Cash Flow">
+                        {data.map((d) => (
+                          <Cell key={d.year} fill={d.renterCashFlow >= 0 ? '#34d399' : '#f87171'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  ) : chartView === 'landlord' && landlordSubView === 'cashflow' ? (
                     <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis
