@@ -28,7 +28,7 @@ import {
   Trophy,
 } from 'lucide-react'
 import { getCaliforniaDefaults } from './data/californiaZipDefaults.js'
-import { runSimulation } from './simulation.js'
+import { DEPRECIATION_PERIOD_YEARS, runSimulation } from './simulation.js'
 import { runMonteCarlo } from './monteCarlo.js'
 import { buildShareUrl, getStateFromUrl } from './shareState.js'
 import { loadUserDefaults, saveUserDefaults } from './userDefaults.js'
@@ -638,7 +638,11 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div
+                className={`mt-5 grid grid-cols-2 gap-3 ${
+                  chartView === 'landlord' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'
+                }`}
+              >
                 <StatCard
                   label="Mortgage (P&I) / mo"
                   value={formatCurrency(mortgagePayment, false)}
@@ -654,6 +658,13 @@ export default function App() {
                   value={displayRenterNetWorth != null ? formatCurrency(displayRenterNetWorth, false) : '-'}
                   accentClass={!buyerWinsAt30 ? 'text-emerald-400' : 'text-slate-300'}
                 />
+                {chartView === 'landlord' && (
+                  <StatCard
+                    label="Buy & Rent Out Net Worth (Yr 30)"
+                    value={finalYear ? formatCurrency(finalYear.landlordNetWorth, false) : '-'}
+                    accentClass="text-pink-400"
+                  />
+                )}
               </div>
             </div>
 
@@ -674,6 +685,17 @@ export default function App() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setChartView('landlord')}
+                    className={`rounded-md px-3 py-1.5 font-medium transition ${
+                      chartView === 'landlord'
+                        ? 'bg-indigo-500 text-white'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Buy & Rent Out
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setChartView('montecarlo')}
                     className={`rounded-md px-3 py-1.5 font-medium transition ${
                       chartView === 'montecarlo'
@@ -685,6 +707,23 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {chartView === 'landlord' && (
+                <div className="mb-3 text-xs text-slate-400">
+                  <p>
+                    Models buying this property and renting it out at the same Monthly Rent used
+                    for the renter comparison, instead of living in it. Assumes straight-line
+                    depreciation over {DEPRECIATION_PERIOD_YEARS} years on 80% of the original home
+                    price (land isn't modeled separately), and taxes the sale with standard
+                    depreciation-recapture rules — 25% federal + state on recaptured depreciation,
+                    ordinary capital-gains rates on any gain beyond that — with no
+                    primary-residence exclusion, since this is a rental property. Rental losses are
+                    assumed fully deductible against other income each year; real
+                    passive-activity-loss limits, vacancy, and property-management costs aren't
+                    modeled.
+                  </p>
+                </div>
+              )}
 
               {chartView === 'montecarlo' && monteCarlo && (
                 <div className="mb-3 space-y-1 text-xs text-slate-400">
@@ -720,7 +759,7 @@ export default function App() {
                 }`}
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  {chartView === 'deterministic' ? (
+                  {chartView === 'deterministic' || chartView === 'landlord' ? (
                     <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis
@@ -772,6 +811,17 @@ export default function App() {
                         dot={false}
                         activeDot={{ r: 5 }}
                       />
+                      {chartView === 'landlord' && (
+                        <Line
+                          type="monotone"
+                          dataKey="landlordNetWorth"
+                          name="Buy & Rent Out"
+                          stroke="#f472b6"
+                          strokeWidth={2.5}
+                          dot={false}
+                          activeDot={{ r: 5 }}
+                        />
+                      )}
                     </LineChart>
                   ) : (
                     <ComposedChart
@@ -871,6 +921,7 @@ export default function App() {
         zipMatch={zipMatch}
         propertyAddress={propertyAddress}
         monteCarlo={monteCarlo}
+        chartView={chartView}
       />
     </div>
   )

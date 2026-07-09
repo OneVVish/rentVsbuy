@@ -15,6 +15,16 @@ export const STANDARD_DEDUCTION_MFJ = 30000
 export const HOME_SALE_EXCLUSION_SINGLE = 250000
 export const HOME_SALE_EXCLUSION_MFJ = 500000
 
+// Standard US residential rental depreciation: buildings depreciate straight-line
+// over 27.5 years (IRS Pub. 527). Land doesn't depreciate; since land value isn't
+// modeled separately here, assume a fixed depreciable basis of 80% of the original
+// purchase price — a common simplifying assumption.
+export const DEPRECIABLE_BASIS_PCT = 0.8
+export const DEPRECIATION_PERIOD_YEARS = 27.5
+// Federal unrecaptured Section 1250 gain (depreciation recapture) rate on sale of
+// rental real estate — a flat rate distinct from ordinary capital-gains rates.
+export const DEPRECIATION_RECAPTURE_FEDERAL_RATE = 25
+
 // Monthly amortized payment for a fixed-rate loan.
 export function calculateMortgagePayment(loanAmount, annualRate, termMonths) {
   const monthlyRate = annualRate / 100 / 12
@@ -62,6 +72,8 @@ export function runSimulation(inputs) {
   // are taxed as ordinary state income, so state tax stacks on top of the federal rate.
   const effectiveMarginalRate = marginalTaxRate + stateTaxRate
   const effectiveCapitalGainsRate = capitalGainsTaxRate + stateTaxRate
+  const annualDepreciation = (homePrice * DEPRECIABLE_BASIS_PCT) / DEPRECIATION_PERIOD_YEARS
+  const maxDepreciation = homePrice * DEPRECIABLE_BASIS_PCT
 
   let homeValue = homePrice
   let assessedValue = homePrice
@@ -74,6 +86,17 @@ export function runSimulation(inputs) {
   let yearInterestPaid = 0
   let yearPropertyTaxPaid = 0
   let monthlyItemizedSavings = 0
+
+  // "Buy & Rent Out": the same property and mortgage as the buyer above, but rented
+  // to a tenant instead of lived in. Modeled on Schedule E (rental income/expense),
+  // not the buyer's Schedule A itemized deduction above — different tax treatment,
+  // computed in parallel from the same shared homeValue/loanBalance trajectory.
+  let landlordPortfolio = downPayment
+  let landlordCostBasis = downPayment
+  let accumulatedDepreciation = 0
+  let monthlyLandlordTaxEffect = 0
+  let yearRentalIncome = 0
+  let yearOwnerCosts = 0
 
   const data = []
 
@@ -90,6 +113,25 @@ export function runSimulation(inputs) {
           (effectiveMarginalRate / 100)
         monthlyItemizedSavings = itemizedTaxSavings / 12
       }
+
+      // Schedule-E-style net taxable rental income for the year just completed,
+      // rolled into this year's monthly tax-effect credit — same one-year lag as
+      // the buyer's itemized-deduction credit above. Can be negative (a paper
+      // loss, common with depreciation); simplified to reduce the landlord's tax
+      // bill dollar-for-dollar rather than modeling real passive-activity-loss
+      // limits (IRC §469), vacancy, or property-management costs.
+      //
+      // Deliberately uses the FULL yearInterestPaid and yearPropertyTaxPaid, NOT
+      // the buyer's deductibleInterestRatio ($750K debt cap) or SALT_DEDUCTION_CAP
+      // ($10K) above — those caps are specific to the itemized (Schedule A)
+      // deduction on a primary residence. A rental property deducts mortgage
+      // interest and property tax in full as ordinary business expenses.
+      const netTaxableRentalIncome =
+        yearRentalIncome - yearInterestPaid - yearPropertyTaxPaid - yearOwnerCosts - annualDepreciation
+      monthlyLandlordTaxEffect = (netTaxableRentalIncome * (effectiveMarginalRate / 100)) / 12
+      yearRentalIncome = 0
+      yearOwnerCosts = 0
+
       yearInterestPaid = 0
       yearPropertyTaxPaid = 0
 
@@ -104,6 +146,7 @@ export function runSimulation(inputs) {
     const principalPayment = mortgagePayment - interestPayment
     loanBalance = Math.max(0, loanBalance - principalPayment)
     yearInterestPaid += interestPayment
+    accumulatedDepreciation = Math.min(accumulatedDepreciation + annualDepreciation / 12, maxDepreciation)
 
     const monthlyPropertyTax = (assessedValue * (propertyTaxRate / 100)) / 12
     yearPropertyTaxPaid += monthlyPropertyTax
@@ -124,6 +167,18 @@ export function runSimulation(inputs) {
       costBasis += monthlySavings
     }
 
+    const monthlyOwnerCosts = monthlyHOA + monthlyInsurance + monthlyMaintenance
+    yearOwnerCosts += monthlyOwnerCosts
+    yearRentalIncome += rent
+
+    const totalMonthlyOwnerCosts = mortgagePayment + monthlyPropertyTax + monthlyOwnerCosts
+    landlordPortfolio *= 1 + monthlyStockReturn
+    const landlordMonthlySavings = rent - totalMonthlyOwnerCosts - monthlyLandlordTaxEffect
+    if (landlordMonthlySavings > 0) {
+      landlordPortfolio += landlordMonthlySavings
+      landlordCostBasis += landlordMonthlySavings
+    }
+
     if (month % 12 === 0) {
       const year = month / 12
       const amountRealized = homeValue * (1 - sellingCostPct / 100)
@@ -132,10 +187,28 @@ export function runSimulation(inputs) {
       const homeSaleTax = taxableHomeGain * (effectiveCapitalGainsRate / 100)
       const netSaleProceeds = amountRealized - loanBalance - homeSaleTax
       const capitalGainsTax = (effectiveCapitalGainsRate / 100) * Math.max(0, portfolio - costBasis)
+
+      // No Section 121 exclusion — this is a rental/investment property, not a
+      // primary residence. Depreciation reduces the cost basis (standard tax
+      // rule); the recaptured portion of the gain is taxed at the flat federal
+      // recapture rate + state, any remaining gain at the normal capital-gains rate.
+      const adjustedCostBasis = homePrice - accumulatedDepreciation
+      const totalGain = amountRealized - adjustedCostBasis
+      const depreciationRecapture = Math.min(Math.max(0, totalGain), accumulatedDepreciation)
+      const remainingGain = Math.max(0, totalGain - accumulatedDepreciation)
+      const landlordHomeSaleTax =
+        depreciationRecapture * ((DEPRECIATION_RECAPTURE_FEDERAL_RATE + stateTaxRate) / 100) +
+        remainingGain * (effectiveCapitalGainsRate / 100)
+      const landlordCapitalGainsTax =
+        (effectiveCapitalGainsRate / 100) * Math.max(0, landlordPortfolio - landlordCostBasis)
+      const landlordNetWorth =
+        amountRealized - loanBalance - landlordHomeSaleTax + landlordPortfolio - landlordCapitalGainsTax
+
       data.push({
         year,
         buyerNetWorth: Math.round(netSaleProceeds),
         renterNetWorth: Math.round(portfolio - capitalGainsTax),
+        landlordNetWorth: Math.round(landlordNetWorth),
         homeValue: Math.round(homeValue),
         monthlyRent: Math.round(rent),
       })

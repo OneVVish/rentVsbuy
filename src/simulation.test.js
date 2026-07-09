@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { calculateMortgagePayment, runSimulation } from './simulation.js'
+import {
+  DEPRECIABLE_BASIS_PCT,
+  DEPRECIATION_RECAPTURE_FEDERAL_RATE,
+  HOME_SALE_EXCLUSION_MFJ,
+  calculateMortgagePayment,
+  runSimulation,
+} from './simulation.js'
 
 const baseInputs = {
   homePrice: 650000,
@@ -117,6 +123,77 @@ describe('runSimulation', () => {
       const low = runSimulation({ ...baseInputs, sellingCostPct: 2 })
       const high = runSimulation({ ...baseInputs, sellingCostPct: 10 })
       expect(high.data[29].buyerNetWorth).toBeLessThan(low.data[29].buyerNetWorth)
+    })
+  })
+
+  describe('landlord (buy & rent out) scenario', () => {
+    it('returns a numeric landlordNetWorth for every year', () => {
+      const { data } = runSimulation(baseInputs)
+      expect(data).toHaveLength(30)
+      expect(data.every((d) => typeof d.landlordNetWorth === 'number' && Number.isFinite(d.landlordNetWorth))).toBe(
+        true,
+      )
+    })
+
+    it('caps depreciation recapture at the full depreciable basis and partitions the sale gain exactly', () => {
+      const inputs = { ...baseInputs, homeAppreciation: 8 }
+      const { data } = runSimulation(inputs)
+      const finalYear = data[29]
+      const amountRealized = finalYear.homeValue * (1 - inputs.sellingCostPct / 100)
+      const maxDepreciation = inputs.homePrice * DEPRECIABLE_BASIS_PCT
+      // 27.5-year depreciation period is shorter than the 30-year hold, so by year
+      // 30 the full depreciable basis has already been used up.
+      const adjustedCostBasis = inputs.homePrice - maxDepreciation
+      const totalGain = amountRealized - adjustedCostBasis
+      expect(totalGain).toBeGreaterThan(maxDepreciation) // sanity: gain big enough to exceed depreciation
+      const depreciationRecapture = Math.min(Math.max(0, totalGain), maxDepreciation)
+      const remainingGain = Math.max(0, totalGain - maxDepreciation)
+      expect(depreciationRecapture).toBe(maxDepreciation)
+      expect(depreciationRecapture + remainingGain).toBeCloseTo(totalGain, 6)
+    })
+
+    it('taxes gains harder than the buyer path since there is no Section 121 exclusion', () => {
+      const inputs = { ...baseInputs, homeAppreciation: 8 }
+      const { data } = runSimulation(inputs)
+      const finalYear = data[29]
+      const amountRealized = finalYear.homeValue * (1 - inputs.sellingCostPct / 100)
+      const maxDepreciation = inputs.homePrice * DEPRECIABLE_BASIS_PCT
+      const totalGain = amountRealized - (inputs.homePrice - maxDepreciation)
+      const depreciationRecapture = Math.min(Math.max(0, totalGain), maxDepreciation)
+      const remainingGain = Math.max(0, totalGain - maxDepreciation)
+      const effectiveCapitalGainsRate = inputs.capitalGainsTaxRate + inputs.stateTaxRate
+      const landlordHomeSaleTax =
+        depreciationRecapture * ((DEPRECIATION_RECAPTURE_FEDERAL_RATE + inputs.stateTaxRate) / 100) +
+        remainingGain * (effectiveCapitalGainsRate / 100)
+
+      const buyerHomeGain = Math.max(0, amountRealized - inputs.homePrice)
+      const buyerTaxableGain = Math.max(0, buyerHomeGain - HOME_SALE_EXCLUSION_MFJ)
+      const buyerHomeSaleTax = buyerTaxableGain * (effectiveCapitalGainsRate / 100)
+
+      expect(landlordHomeSaleTax).toBeGreaterThan(buyerHomeSaleTax)
+    })
+
+    it('degrades sensibly with no rental income (edge case)', () => {
+      const base = runSimulation(baseInputs)
+      const noRent = runSimulation({ ...baseInputs, monthlyRent: 0 })
+      const finalNoRent = noRent.data[29].landlordNetWorth
+      expect(Number.isFinite(finalNoRent)).toBe(true)
+      expect(finalNoRent).toBeLessThan(base.data[29].landlordNetWorth)
+    })
+
+    it('degrades sensibly with a 100% down payment (edge case)', () => {
+      const { data } = runSimulation({ ...baseInputs, downPaymentPct: 100 })
+      expect(Number.isFinite(data[29].landlordNetWorth)).toBe(true)
+    })
+
+    it('does not change buyer or renter net worth (regression guard)', () => {
+      const { data } = runSimulation(baseInputs)
+      expect(data[0].buyerNetWorth).toBe(90312)
+      expect(data[0].renterNetWorth).toBe(157564)
+      expect(data[14].buyerNetWorth).toBe(601193)
+      expect(data[14].renterNetWorth).toBe(596809)
+      expect(data[29].buyerNetWorth).toBe(1520423)
+      expect(data[29].renterNetWorth).toBe(1550453)
     })
   })
 })
