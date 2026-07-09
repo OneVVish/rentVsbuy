@@ -57,6 +57,7 @@ export function runSimulation(inputs) {
     landValue,
     landlordOccupancyRate,
     landlordManagementFeePct,
+    neverSell,
   } = inputs
 
   const downPayment = homePrice * (downPaymentPct / 100)
@@ -216,12 +217,20 @@ export function runSimulation(inputs) {
 
     if (month % 12 === 0) {
       const year = month / 12
-      const amountRealized = homeValue * (1 - sellingCostPct / 100)
+      // "Never Sell": no actual sale happens (the asset is held until death and
+      // inherited), so there are no selling costs, and under current step-up-in-
+      // basis rules (IRC §1014) no capital gains tax or depreciation recapture on
+      // lifetime appreciation. Applied symmetrically to the buyer's home, the
+      // renter's portfolio, and (below) the landlord's property + portfolio, so
+      // the comparison stays fair rather than one-sidedly favoring buying.
+      const amountRealized = neverSell ? homeValue : homeValue * (1 - sellingCostPct / 100)
       const homeGain = Math.max(0, amountRealized - homePrice)
       const taxableHomeGain = Math.max(0, homeGain - homeSaleExclusion)
-      const homeSaleTax = taxableHomeGain * (effectiveCapitalGainsRate / 100)
+      const homeSaleTax = neverSell ? 0 : taxableHomeGain * (effectiveCapitalGainsRate / 100)
       const netSaleProceeds = amountRealized - loanBalance - homeSaleTax
-      const capitalGainsTax = (effectiveCapitalGainsRate / 100) * Math.max(0, portfolio - costBasis)
+      const capitalGainsTax = neverSell
+        ? 0
+        : (effectiveCapitalGainsRate / 100) * Math.max(0, portfolio - costBasis)
 
       // No Section 121 exclusion — this is a rental/investment property, not a
       // primary residence. Depreciation reduces the cost basis (standard tax
@@ -231,11 +240,13 @@ export function runSimulation(inputs) {
       const totalGain = amountRealized - adjustedCostBasis
       const depreciationRecapture = Math.min(Math.max(0, totalGain), accumulatedDepreciation)
       const remainingGain = Math.max(0, totalGain - accumulatedDepreciation)
-      const landlordHomeSaleTax =
-        depreciationRecapture * ((DEPRECIATION_RECAPTURE_FEDERAL_RATE + stateTaxRate) / 100) +
-        remainingGain * (effectiveCapitalGainsRate / 100)
-      const landlordCapitalGainsTax =
-        (effectiveCapitalGainsRate / 100) * Math.max(0, landlordPortfolio - landlordCostBasis)
+      const landlordHomeSaleTax = neverSell
+        ? 0
+        : depreciationRecapture * ((DEPRECIATION_RECAPTURE_FEDERAL_RATE + stateTaxRate) / 100) +
+          remainingGain * (effectiveCapitalGainsRate / 100)
+      const landlordCapitalGainsTax = neverSell
+        ? 0
+        : (effectiveCapitalGainsRate / 100) * Math.max(0, landlordPortfolio - landlordCostBasis)
       // Net worth splits cleanly into two pieces with very different liquidity/tax
       // characteristics: the property itself (illiquid, tax-deferred until sale)
       // and reinvested cash-flow surplus (liquid, taxed annually on realized gains).

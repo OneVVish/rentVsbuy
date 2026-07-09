@@ -155,6 +155,7 @@ const DEFAULT_INPUTS = {
   landValue: 130000,
   landlordOccupancyRate: 95,
   landlordManagementFeePct: 8,
+  neverSell: false,
 }
 
 const INVESTMENT_VEHICLES = {
@@ -534,6 +535,12 @@ export default function App() {
                 checked={inputs.marriedFilingJointly}
                 onChange={setField('marriedFilingJointly')}
               />
+              <Toggle
+                label="Never Sell (Pass to Heirs)"
+                description="Assumes the property and/or portfolio is held until death and inherited, not sold — under current step-up-in-basis rules this erases capital gains tax (and depreciation recapture) on lifetime appreciation. Selling costs don't apply either. Applies to the Buyer's home, the Renter's portfolio, and the Landlord path."
+                checked={inputs.neverSell}
+                onChange={setField('neverSell')}
+              />
             </SectionCard>
 
             <SectionCard icon={LineChartIcon} title="Market Assumptions">
@@ -770,6 +777,8 @@ export default function App() {
                     where the rental runs a cash-flow deficit draw down the Invested Surplus
                     (below) rather than coming from an untracked outside source — the same rule
                     applies to the Renter path whenever rent costs more than buying that month.
+                    {inputs.neverSell &&
+                      ' "Never Sell" is on: the sale tax and depreciation recapture above are skipped, since the property is assumed to be inherited rather than sold.'}
                     {landlordSubView === 'cashflow' &&
                       ' Cash flow is net of the tax effect above, including its one-year lag.'}
                     {landlordSubView === 'breakdown' &&

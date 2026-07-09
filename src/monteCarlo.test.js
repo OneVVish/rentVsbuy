@@ -68,6 +68,19 @@ describe('runMonteCarlo', () => {
     const treasurySpread = treasuries.data[29].renterP90 - treasuries.data[29].renterP10
     expect(treasurySpread).toBeLessThan(stockSpread)
   })
+
+  describe('never sell (pass to heirs)', () => {
+    // Large appreciation makes the removed tax large relative to trial-to-trial
+    // random noise, so the median comparison below is robust, not flaky.
+    const highAppreciationInputs = { ...baseInputs, homeAppreciation: 8 }
+
+    it('raises median buyer and renter year-30 net worth by removing sale/capital-gains tax', () => {
+      const off = runMonteCarlo({ ...highAppreciationInputs, neverSell: false }, TEST_TRIALS)
+      const on = runMonteCarlo({ ...highAppreciationInputs, neverSell: true }, TEST_TRIALS)
+      expect(on.data[29].buyerMedian).toBeGreaterThan(off.data[29].buyerMedian)
+      expect(on.data[29].renterMedian).toBeGreaterThan(off.data[29].renterMedian)
+    })
+  })
 })
 
 function pearsonCorrelation(xs, ys) {

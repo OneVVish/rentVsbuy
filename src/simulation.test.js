@@ -291,4 +291,45 @@ describe('runSimulation', () => {
       })
     })
   })
+
+  describe('never sell (pass to heirs)', () => {
+    // Large appreciation so there's real gain that would otherwise trigger the
+    // Section 121 exclusion overflow, capital gains tax, and depreciation
+    // recapture — makes the effect of the toggle unambiguous.
+    const highAppreciationInputs = { ...baseInputs, homeAppreciation: 8 }
+
+    it('buyer net worth equals home value minus loan balance exactly (no selling costs/tax)', () => {
+      const { data } = runSimulation({ ...highAppreciationInputs, neverSell: true })
+      // The mortgage is sized to fully amortize by month 360, so loan balance at
+      // year 30 is ~0 — buyerNetWorth should equal homeValue exactly in that case.
+      expect(data[29].buyerNetWorth).toBe(data[29].homeValue)
+    })
+
+    it('renter net worth equals the untaxed portfolio (no capital gains tax)', () => {
+      const off = runSimulation({ ...highAppreciationInputs, neverSell: false })
+      const on = runSimulation({ ...highAppreciationInputs, neverSell: true })
+      expect(on.data[29].renterNetWorth).toBeGreaterThan(off.data[29].renterNetWorth)
+    })
+
+    it('landlord property equity equals home value exactly (no sale tax, no recapture)', () => {
+      const { data } = runSimulation({ ...highAppreciationInputs, neverSell: true })
+      expect(data[29].landlordPropertyEquity).toBe(data[29].homeValue)
+    })
+
+    it('never produces a lower net worth than the taxed-sale default, for any path or year', () => {
+      const off = runSimulation({ ...highAppreciationInputs, neverSell: false })
+      const on = runSimulation({ ...highAppreciationInputs, neverSell: true })
+      for (let i = 0; i < off.data.length; i++) {
+        expect(on.data[i].buyerNetWorth).toBeGreaterThanOrEqual(off.data[i].buyerNetWorth)
+        expect(on.data[i].renterNetWorth).toBeGreaterThanOrEqual(off.data[i].renterNetWorth)
+        expect(on.data[i].landlordNetWorth).toBeGreaterThanOrEqual(off.data[i].landlordNetWorth)
+      }
+    })
+
+    it('leaves default (neverSell omitted) behavior unchanged — regression guard', () => {
+      const { data } = runSimulation(baseInputs)
+      expect(data[0].buyerNetWorth).toBe(90312)
+      expect(data[29].buyerNetWorth).toBe(1520423)
+    })
+  })
 })

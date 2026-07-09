@@ -327,6 +327,7 @@ export default function PrintReport({
             label="Filing Status"
             value={inputs.marriedFilingJointly ? 'Married Filing Jointly' : 'Single'}
           />
+          <InputRow label="Never Sell (Pass to Heirs)" value={inputs.neverSell ? 'On' : 'Off'} />
 
           <h2 className="mb-2 mt-4 text-sm font-bold uppercase tracking-wide text-slate-500">
             Market Assumptions

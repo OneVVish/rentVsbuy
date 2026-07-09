@@ -85,6 +85,7 @@ export function simulateTrial(inputs) {
     maintenanceInflation,
     capitalGainsTaxRate,
     marriedFilingJointly,
+    neverSell,
   } = inputs
 
   const downPayment = homePrice * (downPaymentPct / 100)
@@ -169,12 +170,16 @@ export function simulateTrial(inputs) {
     }
 
     if (month % 12 === 0) {
-      const amountRealized = homeValue * (1 - sellingCostPct / 100)
+      // "Never Sell": see the matching comment in simulation.js — no sale, no
+      // selling costs, and (under step-up-in-basis rules) no capital gains tax.
+      const amountRealized = neverSell ? homeValue : homeValue * (1 - sellingCostPct / 100)
       const homeGain = Math.max(0, amountRealized - homePrice)
       const taxableHomeGain = Math.max(0, homeGain - homeSaleExclusion)
-      const homeSaleTax = taxableHomeGain * (effectiveCapitalGainsRate / 100)
+      const homeSaleTax = neverSell ? 0 : taxableHomeGain * (effectiveCapitalGainsRate / 100)
       const netSaleProceeds = amountRealized - loanBalance - homeSaleTax
-      const capitalGainsTax = (effectiveCapitalGainsRate / 100) * Math.max(0, portfolio - costBasis)
+      const capitalGainsTax = neverSell
+        ? 0
+        : (effectiveCapitalGainsRate / 100) * Math.max(0, portfolio - costBasis)
       yearly.push({
         buyerNetWorth: netSaleProceeds,
         renterNetWorth: portfolio - capitalGainsTax,
