@@ -16,10 +16,9 @@ export const HOME_SALE_EXCLUSION_SINGLE = 250000
 export const HOME_SALE_EXCLUSION_MFJ = 500000
 
 // Standard US residential rental depreciation: buildings depreciate straight-line
-// over 27.5 years (IRS Pub. 527). Land doesn't depreciate; since land value isn't
-// modeled separately here, assume a fixed depreciable basis of 80% of the original
-// purchase price — a common simplifying assumption.
-export const DEPRECIABLE_BASIS_PCT = 0.8
+// over 27.5 years (IRS Pub. 527). Land itself never depreciates — the user-provided
+// Land Value input is subtracted from the purchase price to get the depreciable
+// (building-only) basis.
 export const DEPRECIATION_PERIOD_YEARS = 27.5
 // Federal unrecaptured Section 1250 gain (depreciation recapture) rate on sale of
 // rental real estate — a flat rate distinct from ordinary capital-gains rates.
@@ -55,6 +54,9 @@ export function runSimulation(inputs) {
     maintenanceInflation,
     capitalGainsTaxRate,
     marriedFilingJointly,
+    landValue,
+    landlordOccupancyRate,
+    landlordManagementFeePct,
   } = inputs
 
   const downPayment = homePrice * (downPaymentPct / 100)
@@ -72,8 +74,11 @@ export function runSimulation(inputs) {
   // are taxed as ordinary state income, so state tax stacks on top of the federal rate.
   const effectiveMarginalRate = marginalTaxRate + stateTaxRate
   const effectiveCapitalGainsRate = capitalGainsTaxRate + stateTaxRate
-  const annualDepreciation = (homePrice * DEPRECIABLE_BASIS_PCT) / DEPRECIATION_PERIOD_YEARS
-  const maxDepreciation = homePrice * DEPRECIABLE_BASIS_PCT
+  // Land never depreciates — only the building (purchase price minus land value) does.
+  const depreciableBasis = Math.max(0, homePrice - landValue)
+  const annualDepreciation = depreciableBasis / DEPRECIATION_PERIOD_YEARS
+  const maxDepreciation = depreciableBasis
+  const occupancyFactor = landlordOccupancyRate / 100
 
   let homeValue = homePrice
   let assessedValue = homePrice
@@ -97,6 +102,7 @@ export function runSimulation(inputs) {
   let monthlyLandlordTaxEffect = 0
   let yearRentalIncome = 0
   let yearOwnerCosts = 0
+  let yearManagementFeePaid = 0
 
   const data = []
 
@@ -119,7 +125,9 @@ export function runSimulation(inputs) {
       // the buyer's itemized-deduction credit above. Can be negative (a paper
       // loss, common with depreciation); simplified to reduce the landlord's tax
       // bill dollar-for-dollar rather than modeling real passive-activity-loss
-      // limits (IRC §469), vacancy, or property-management costs.
+      // limits (IRC §469). yearRentalIncome already reflects the occupancy rate
+      // (vacant months collect no rent), and the management fee is its own
+      // deductible line item below.
       //
       // Deliberately uses the FULL yearInterestPaid and yearPropertyTaxPaid, NOT
       // the buyer's deductibleInterestRatio ($750K debt cap) or SALT_DEDUCTION_CAP
@@ -127,10 +135,16 @@ export function runSimulation(inputs) {
       // deduction on a primary residence. A rental property deducts mortgage
       // interest and property tax in full as ordinary business expenses.
       const netTaxableRentalIncome =
-        yearRentalIncome - yearInterestPaid - yearPropertyTaxPaid - yearOwnerCosts - annualDepreciation
+        yearRentalIncome -
+        yearInterestPaid -
+        yearPropertyTaxPaid -
+        yearOwnerCosts -
+        yearManagementFeePaid -
+        annualDepreciation
       monthlyLandlordTaxEffect = (netTaxableRentalIncome * (effectiveMarginalRate / 100)) / 12
       yearRentalIncome = 0
       yearOwnerCosts = 0
+      yearManagementFeePaid = 0
 
       yearInterestPaid = 0
       yearPropertyTaxPaid = 0
@@ -167,13 +181,21 @@ export function runSimulation(inputs) {
       costBasis += monthlySavings
     }
 
+    // Vacancy reduces rental income received, but not carrying costs (mortgage,
+    // tax, HOA, insurance, maintenance keep accruing whether or not a tenant is
+    // in place). The management fee is charged on collected (post-vacancy) rent,
+    // the standard convention, and is itself a deductible operating expense.
+    const collectedRent = rent * occupancyFactor
+    const managementFee = collectedRent * (landlordManagementFeePct / 100)
+    yearRentalIncome += collectedRent
+    yearManagementFeePaid += managementFee
+
     const monthlyOwnerCosts = monthlyHOA + monthlyInsurance + monthlyMaintenance
     yearOwnerCosts += monthlyOwnerCosts
-    yearRentalIncome += rent
 
-    const totalMonthlyOwnerCosts = mortgagePayment + monthlyPropertyTax + monthlyOwnerCosts
+    const totalMonthlyOwnerCosts = mortgagePayment + monthlyPropertyTax + monthlyOwnerCosts + managementFee
     landlordPortfolio *= 1 + monthlyStockReturn
-    const landlordMonthlySavings = rent - totalMonthlyOwnerCosts - monthlyLandlordTaxEffect
+    const landlordMonthlySavings = collectedRent - totalMonthlyOwnerCosts - monthlyLandlordTaxEffect
     if (landlordMonthlySavings > 0) {
       landlordPortfolio += landlordMonthlySavings
       landlordCostBasis += landlordMonthlySavings

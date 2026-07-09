@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEPRECIABLE_BASIS_PCT,
   DEPRECIATION_RECAPTURE_FEDERAL_RATE,
   HOME_SALE_EXCLUSION_MFJ,
   calculateMortgagePayment,
@@ -28,6 +27,9 @@ const baseInputs = {
   maintenanceInflation: 3,
   capitalGainsTaxRate: 15,
   marriedFilingJointly: true,
+  landValue: 130000, // 20% of homePrice — the building (depreciable basis) is the other 80%
+  landlordOccupancyRate: 100,
+  landlordManagementFeePct: 0,
 }
 
 describe('calculateMortgagePayment', () => {
@@ -140,7 +142,7 @@ describe('runSimulation', () => {
       const { data } = runSimulation(inputs)
       const finalYear = data[29]
       const amountRealized = finalYear.homeValue * (1 - inputs.sellingCostPct / 100)
-      const maxDepreciation = inputs.homePrice * DEPRECIABLE_BASIS_PCT
+      const maxDepreciation = inputs.homePrice - inputs.landValue
       // 27.5-year depreciation period is shorter than the 30-year hold, so by year
       // 30 the full depreciable basis has already been used up.
       const adjustedCostBasis = inputs.homePrice - maxDepreciation
@@ -157,7 +159,7 @@ describe('runSimulation', () => {
       const { data } = runSimulation(inputs)
       const finalYear = data[29]
       const amountRealized = finalYear.homeValue * (1 - inputs.sellingCostPct / 100)
-      const maxDepreciation = inputs.homePrice * DEPRECIABLE_BASIS_PCT
+      const maxDepreciation = inputs.homePrice - inputs.landValue
       const totalGain = amountRealized - (inputs.homePrice - maxDepreciation)
       const depreciationRecapture = Math.min(Math.max(0, totalGain), maxDepreciation)
       const remainingGain = Math.max(0, totalGain - maxDepreciation)
@@ -194,6 +196,66 @@ describe('runSimulation', () => {
       expect(data[14].renterNetWorth).toBe(596809)
       expect(data[29].buyerNetWorth).toBe(1520423)
       expect(data[29].renterNetWorth).toBe(1550453)
+    })
+
+    describe('occupancy rate', () => {
+      // A rent high enough to produce positive cash flow, so vacancy differences
+      // are actually visible (baseInputs' rent is too low relative to costs for
+      // any occupancy level to ever cross into positive cash flow).
+      const highRentInputs = { ...baseInputs, monthlyRent: 6000 }
+
+      it('reduces landlord net worth monotonically as occupancy drops', () => {
+        const full = runSimulation({ ...highRentInputs, landlordOccupancyRate: 100 })
+        const partial = runSimulation({ ...highRentInputs, landlordOccupancyRate: 70 })
+        const vacant = runSimulation({ ...highRentInputs, landlordOccupancyRate: 0 })
+        expect(partial.data[29].landlordNetWorth).toBeLessThan(full.data[29].landlordNetWorth)
+        expect(vacant.data[29].landlordNetWorth).toBeLessThan(partial.data[29].landlordNetWorth)
+      })
+
+      it('does not affect the shared buyer/renter figures', () => {
+        const full = runSimulation({ ...highRentInputs, landlordOccupancyRate: 100 })
+        const vacant = runSimulation({ ...highRentInputs, landlordOccupancyRate: 0 })
+        expect(vacant.data[29].buyerNetWorth).toBe(full.data[29].buyerNetWorth)
+        expect(vacant.data[29].renterNetWorth).toBe(full.data[29].renterNetWorth)
+      })
+
+      it('handles full vacancy without NaN/crash', () => {
+        const { data } = runSimulation({ ...baseInputs, landlordOccupancyRate: 0 })
+        expect(Number.isFinite(data[29].landlordNetWorth)).toBe(true)
+      })
+    })
+
+    describe('annual management fee', () => {
+      const highRentInputs = { ...baseInputs, monthlyRent: 6000 }
+
+      it('reduces landlord net worth monotonically as the fee rises', () => {
+        const none = runSimulation({ ...highRentInputs, landlordManagementFeePct: 0 })
+        const some = runSimulation({ ...highRentInputs, landlordManagementFeePct: 8 })
+        const all = runSimulation({ ...highRentInputs, landlordManagementFeePct: 100 })
+        expect(some.data[29].landlordNetWorth).toBeLessThan(none.data[29].landlordNetWorth)
+        expect(all.data[29].landlordNetWorth).toBeLessThan(some.data[29].landlordNetWorth)
+      })
+
+      it('handles a 100% fee (all rent consumed) without NaN/crash', () => {
+        const { data } = runSimulation({ ...highRentInputs, landlordManagementFeePct: 100 })
+        expect(Number.isFinite(data[29].landlordNetWorth)).toBe(true)
+      })
+    })
+
+    describe('land value', () => {
+      it('reduces the depreciation tax shield as land value rises (less building to depreciate)', () => {
+        const highRentInputs = { ...baseInputs, monthlyRent: 6000 }
+        const mostlyBuilding = runSimulation({ ...highRentInputs, landValue: 0 })
+        const balanced = runSimulation({ ...highRentInputs, landValue: 130000 })
+        const allLand = runSimulation({ ...highRentInputs, landValue: highRentInputs.homePrice })
+        expect(balanced.data[29].landlordNetWorth).toBeLessThan(mostlyBuilding.data[29].landlordNetWorth)
+        expect(allLand.data[29].landlordNetWorth).toBeLessThan(balanced.data[29].landlordNetWorth)
+      })
+
+      it('clamps depreciable basis at zero if land value exceeds home price (edge case)', () => {
+        const { data } = runSimulation({ ...baseInputs, landValue: baseInputs.homePrice * 2 })
+        expect(Number.isFinite(data[29].landlordNetWorth)).toBe(true)
+      })
     })
   })
 })

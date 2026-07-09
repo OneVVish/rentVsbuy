@@ -156,9 +156,10 @@ export default function PrintReport({
           </h2>
           <p className="mb-3 text-sm">
             Models buying this property and renting it out at the same Monthly Rent used for the
-            renter comparison. Assumes straight-line depreciation over {DEPRECIATION_PERIOD_YEARS}{' '}
-            years on 80% of the original home price, with standard depreciation-recapture rules at
-            sale and no primary-residence tax exclusion, since this is a rental property.
+            renter comparison, reduced by the Occupancy Rate and Annual Management Fee below.
+            Assumes straight-line depreciation over {DEPRECIATION_PERIOD_YEARS} years on the
+            building only (Home Price minus Land Value), with standard depreciation-recapture
+            rules at sale and no primary-residence tax exclusion, since this is a rental property.
           </p>
           <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -336,6 +337,13 @@ export default function PrintReport({
           <InputRow label="Rent Inflation" value={`${inputs.rentInflation.toFixed(1)}%`} />
           <InputRow label="Insurance Inflation" value={`${inputs.insuranceInflation.toFixed(1)}%`} />
           <InputRow label="Maintenance Inflation" value={`${inputs.maintenanceInflation.toFixed(1)}%`} />
+
+          <h2 className="mb-2 mt-4 text-sm font-bold uppercase tracking-wide text-slate-500">
+            Landlord Scenario
+          </h2>
+          <InputRow label="Land Value" value={formatCurrency(inputs.landValue, false)} />
+          <InputRow label="Occupancy Rate" value={`${inputs.landlordOccupancyRate}%`} />
+          <InputRow label="Annual Management Fee" value={`${inputs.landlordManagementFeePct.toFixed(1)}%`} />
         </div>
       </section>
 

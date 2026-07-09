@@ -17,6 +17,7 @@ import {
   Building2,
   Check,
   Home,
+  KeyRound,
   Landmark,
   LineChart as LineChartIcon,
   MapPin,
@@ -148,6 +149,9 @@ const DEFAULT_INPUTS = {
   maintenanceInflation: 3,
   capitalGainsTaxRate: 15,
   marriedFilingJointly: true,
+  landValue: 130000,
+  landlordOccupancyRate: 95,
+  landlordManagementFeePct: 8,
 }
 
 const INVESTMENT_VEHICLES = {
@@ -600,6 +604,42 @@ export default function App() {
                 accent="#34d399"
               />
             </SectionCard>
+
+            <SectionCard icon={KeyRound} title="Landlord Scenario">
+              <Slider
+                label="Land Value"
+                value={inputs.landValue}
+                onChange={setField('landValue')}
+                min={0}
+                max={2000000}
+                step={5000}
+                format={(v) => formatCurrency(v)}
+                accent="#f472b6"
+                description="Excluded from depreciation — only the building (Home Price minus this) depreciates."
+              />
+              <Slider
+                label="Occupancy Rate"
+                value={inputs.landlordOccupancyRate}
+                onChange={setField('landlordOccupancyRate')}
+                min={0}
+                max={100}
+                step={1}
+                format={(v) => `${v}%`}
+                accent="#f472b6"
+                description="Percent of the year the unit is actually rented; vacancy reduces rental income but not carrying costs."
+              />
+              <Slider
+                label="Annual Management Fee"
+                value={inputs.landlordManagementFeePct}
+                onChange={setField('landlordManagementFeePct')}
+                min={0}
+                max={15}
+                step={0.5}
+                format={(v) => `${v.toFixed(1)}%`}
+                accent="#f472b6"
+                description="Property-management fee as a percentage of collected rent (0% if you self-manage)."
+              />
+            </SectionCard>
           </div>
 
           {/* Visualization */}
@@ -712,15 +752,15 @@ export default function App() {
                 <div className="mb-3 text-xs text-slate-400">
                   <p>
                     Models buying this property and renting it out at the same Monthly Rent used
-                    for the renter comparison, instead of living in it. Assumes straight-line
-                    depreciation over {DEPRECIATION_PERIOD_YEARS} years on 80% of the original home
-                    price (land isn't modeled separately), and taxes the sale with standard
+                    for the renter comparison, instead of living in it, reduced by the Landlord
+                    Scenario section's Occupancy Rate and Annual Management Fee. Assumes
+                    straight-line depreciation over {DEPRECIATION_PERIOD_YEARS} years on the
+                    building only (Home Price minus Land Value), and taxes the sale with standard
                     depreciation-recapture rules — 25% federal + state on recaptured depreciation,
                     ordinary capital-gains rates on any gain beyond that — with no
                     primary-residence exclusion, since this is a rental property. Rental losses are
                     assumed fully deductible against other income each year; real
-                    passive-activity-loss limits, vacancy, and property-management costs aren't
-                    modeled.
+                    passive-activity-loss limits and tenant turnover costs aren't modeled.
                   </p>
                 </div>
               )}
