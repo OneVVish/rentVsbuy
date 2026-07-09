@@ -198,6 +198,30 @@ describe('runSimulation', () => {
       expect(data[29].renterNetWorth).toBe(1550453)
     })
 
+    describe('cash flow and equity/investment breakdown', () => {
+      it('partitions net worth into property equity + invested surplus (within $1 rounding)', () => {
+        const { data } = runSimulation(baseInputs)
+        for (const d of data) {
+          expect(Math.abs(d.landlordPropertyEquity + d.landlordInvestedSurplus - d.landlordNetWorth)).toBeLessThanOrEqual(
+            1,
+          )
+        }
+      })
+
+      it('does not change landlordNetWorth itself (regression guard on the decomposition refactor)', () => {
+        const { data } = runSimulation(baseInputs)
+        expect(data[0].landlordNetWorth).toBe(227201)
+        expect(data[14].landlordNetWorth).toBe(727187)
+        expect(data[29].landlordNetWorth).toBe(2023345)
+      })
+
+      it('reports negative cash flow in year 1 and improves as rent inflates', () => {
+        const { data } = runSimulation(baseInputs)
+        expect(data[0].landlordCashFlow).toBeLessThan(0)
+        expect(data[29].landlordCashFlow).toBeGreaterThan(data[0].landlordCashFlow)
+      })
+    })
+
     describe('occupancy rate', () => {
       // A rent high enough to produce positive cash flow, so vacancy differences
       // are actually visible (baseInputs' rent is too low relative to costs for

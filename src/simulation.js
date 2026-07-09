@@ -103,6 +103,7 @@ export function runSimulation(inputs) {
   let yearRentalIncome = 0
   let yearOwnerCosts = 0
   let yearManagementFeePaid = 0
+  let yearLandlordCashFlow = 0
 
   const data = []
 
@@ -196,6 +197,10 @@ export function runSimulation(inputs) {
     const totalMonthlyOwnerCosts = mortgagePayment + monthlyPropertyTax + monthlyOwnerCosts + managementFee
     landlordPortfolio *= 1 + monthlyStockReturn
     const landlordMonthlySavings = collectedRent - totalMonthlyOwnerCosts - monthlyLandlordTaxEffect
+    // Unconditional — unlike the portfolio contribution below, this tracks the
+    // landlord's actual cash flow whether positive or negative, for the Cash
+    // Flow chart.
+    yearLandlordCashFlow += landlordMonthlySavings
     if (landlordMonthlySavings > 0) {
       landlordPortfolio += landlordMonthlySavings
       landlordCostBasis += landlordMonthlySavings
@@ -223,17 +228,25 @@ export function runSimulation(inputs) {
         remainingGain * (effectiveCapitalGainsRate / 100)
       const landlordCapitalGainsTax =
         (effectiveCapitalGainsRate / 100) * Math.max(0, landlordPortfolio - landlordCostBasis)
-      const landlordNetWorth =
-        amountRealized - loanBalance - landlordHomeSaleTax + landlordPortfolio - landlordCapitalGainsTax
+      // Net worth splits cleanly into two pieces with very different liquidity/tax
+      // characteristics: the property itself (illiquid, tax-deferred until sale)
+      // and reinvested cash-flow surplus (liquid, taxed annually on realized gains).
+      const landlordPropertyEquity = amountRealized - loanBalance - landlordHomeSaleTax
+      const landlordInvestedSurplus = landlordPortfolio - landlordCapitalGainsTax
+      const landlordNetWorth = landlordPropertyEquity + landlordInvestedSurplus
 
       data.push({
         year,
         buyerNetWorth: Math.round(netSaleProceeds),
         renterNetWorth: Math.round(portfolio - capitalGainsTax),
         landlordNetWorth: Math.round(landlordNetWorth),
+        landlordCashFlow: Math.round(yearLandlordCashFlow),
+        landlordPropertyEquity: Math.round(landlordPropertyEquity),
+        landlordInvestedSurplus: Math.round(landlordInvestedSurplus),
         homeValue: Math.round(homeValue),
         monthlyRent: Math.round(rent),
       })
+      yearLandlordCashFlow = 0
     }
   }
 

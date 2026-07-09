@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useDebouncedValue } from './useDebouncedValue.js'
 import {
   Area,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
@@ -220,6 +223,9 @@ export default function App() {
   const finalYear = data[data.length - 1]
 
   const [chartView, setChartView] = useState(() => sharedState?.chartView ?? 'deterministic')
+  // Sub-view within the "Buy & Rent Out" tab only — not persisted via Share
+  // Scenario/Save Defaults, since it's a viewing preference, not an input.
+  const [landlordSubView, setLandlordSubView] = useState('networth')
 
   // Monte Carlo runs 500 trials of a 30-year monthly simulation, so re-running it on every
   // slider-drag tick would jank the UI. Debounce it and let the deterministic view (cheap)
@@ -761,7 +767,46 @@ export default function App() {
                     primary-residence exclusion, since this is a rental property. Rental losses are
                     assumed fully deductible against other income each year; real
                     passive-activity-loss limits and tenant turnover costs aren't modeled.
+                    {landlordSubView === 'cashflow' &&
+                      ' Cash flow is net of the tax effect above, including its one-year lag.'}
+                    {landlordSubView === 'breakdown' &&
+                      ' Property Equity is the after-tax value if sold that year; Invested Surplus is the after-tax value of reinvested cash flow.'}
                   </p>
+                  <div className="mt-2 inline-flex rounded-lg border border-slate-700 bg-slate-950 p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setLandlordSubView('networth')}
+                      className={`rounded-md px-2.5 py-1 font-medium transition ${
+                        landlordSubView === 'networth'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Net Worth
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLandlordSubView('cashflow')}
+                      className={`rounded-md px-2.5 py-1 font-medium transition ${
+                        landlordSubView === 'cashflow'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Cash Flow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLandlordSubView('breakdown')}
+                      className={`rounded-md px-2.5 py-1 font-medium transition ${
+                        landlordSubView === 'breakdown'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Equity vs Investment
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -799,7 +844,78 @@ export default function App() {
                 }`}
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  {chartView === 'deterministic' || chartView === 'landlord' ? (
+                  {chartView === 'landlord' && landlordSubView === 'cashflow' ? (
+                    <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis
+                        dataKey="year"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        label={{ value: 'Years', position: 'insideBottom', offset: -3, fill: '#64748b' }}
+                      />
+                      <YAxis
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        tickFormatter={(v) => formatCurrency(v)}
+                        width={70}
+                      />
+                      <Tooltip
+                        formatter={tooltipFormatter}
+                        labelFormatter={(year) => `Year ${year}`}
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '0.75rem',
+                          color: '#e2e8f0',
+                        }}
+                      />
+                      <ReferenceLine y={0} stroke="#475569" />
+                      <Bar dataKey="landlordCashFlow" name="Annual Cash Flow">
+                        {data.map((d) => (
+                          <Cell key={d.year} fill={d.landlordCashFlow >= 0 ? '#34d399' : '#f87171'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  ) : chartView === 'landlord' && landlordSubView === 'breakdown' ? (
+                    <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis
+                        dataKey="year"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        label={{ value: 'Years', position: 'insideBottom', offset: -3, fill: '#64748b' }}
+                      />
+                      <YAxis
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        tickFormatter={(v) => formatCurrency(v)}
+                        width={70}
+                      />
+                      <Tooltip
+                        formatter={tooltipFormatter}
+                        labelFormatter={(year) => `Year ${year}`}
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '0.75rem',
+                          color: '#e2e8f0',
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} />
+                      <Bar
+                        dataKey="landlordPropertyEquity"
+                        name="Property Equity"
+                        stackId="landlord"
+                        fill="#818cf8"
+                      />
+                      <Bar
+                        dataKey="landlordInvestedSurplus"
+                        name="Invested Surplus"
+                        stackId="landlord"
+                        fill="#f472b6"
+                      />
+                    </BarChart>
+                  ) : chartView === 'deterministic' || chartView === 'landlord' ? (
                     <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis
