@@ -205,6 +205,61 @@ behind it. Same rigor, whichever path you're actually weighing.
 
 ---
 
+<h3>The question</h3>
+
+<p class="question">"How do we know a change didn't quietly break the math?"</p>
+
+## A real test suite, not just eyeballing the chart
+
+Every core calculation — mortgage amortization, tax logic, Monte Carlo
+percentiles, zip lookup, screenshot parsing — got automated tests, run in CI
+before every deploy. One of those tests caught a real currency-formatting
+bug that only showed up on the CI server's Node version, before it ever
+reached production.
+
+---
+
+<h3>The question</h3>
+
+<p class="question">"What if a crash year for stocks landed on a calm year for housing in the same simulated trial?"</p>
+
+## Correlated, not just random
+
+The Monte Carlo simulation used to draw the stock return and the home-price
+change for a given year **independently** — so a simulated trial could pair
+2008's stock crash with a historically strong housing year, which never
+actually happened. Now each simulated year draws **one** real historical
+year and applies that year's return and home-price change together, so
+downturns that hit both markets at once stay paired.
+
+---
+
+<h3>The question</h3>
+
+<p class="question">"Can I set my own starting point, and label which property this actually is?"</p>
+
+## Your own defaults, and a way back to them
+
+"Save as My Defaults" remembers your own baseline assumptions in the
+browser; "Reset to Defaults" snaps everything back to it (or the factory
+scenario, if you've never saved one) in one click. A Property Address field
+labels exactly which listing a scenario is for, on screen and on the PDF
+report.
+
+---
+
+<h3>The question</h3>
+
+<p class="question">"Can I use this without the web app at all?"</p>
+
+## The same model, as a spreadsheet
+
+A Google Apps Script builds a live-formula Google Sheet replica — the same
+deterministic engine and the same 500-trial correlated Monte Carlo
+simulation, driven entirely by your own inputs, auditable cell by cell.
+
+---
+
 <!-- _class: lead -->
 
 # Every Feature Started With a Question

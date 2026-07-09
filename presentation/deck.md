@@ -100,6 +100,14 @@ Type a zip code, get real defaults for that market instantly:
 
 ---
 
+## Skip the Typing
+
+Drop in a screenshot of a Zillow listing — price, rent estimate, property
+tax, and HOA get pulled out automatically via on-device OCR. Nothing
+applies silently: every extracted value is shown for review first.
+
+---
+
 ## One Clear Answer: When Does Buying Win?
 
 - **Break-even year** — the year buying's net worth overtakes renting's
@@ -110,13 +118,29 @@ Type a zip code, get real defaults for that market instantly:
 
 ---
 
+## Pick Your Own Investment
+
+Not everyone would put the down payment in the stock market. Choose:
+
+- **Stocks** — S&P 500
+- **Treasury bonds** — steady, low-volatility
+- **Gold** — no yield, historically choppier
+
+Every option is backed by its own real 1987–2025 historical returns.
+
+---
+
 ## Beyond a Single Guess: Monte Carlo Risk
 
-Markets don't move in a straight line. Toggle to see a **range of outcomes**, not just one:
+Markets don't move in a straight line. Toggle to see a **range of outcomes**, not just one — and a *correlated* one:
 
-- Stock returns bootstrapped from real **1928–2025 S&P 500** history
-- Home appreciation bootstrapped from the real **FRED Case-Shiller index**
-- 500 simulated 30-year scenarios → "buying wins in 67% of outcomes"
+- 500 simulated 30-year scenarios, each year drawn from a real historical
+  calendar year (1987–2025)
+- Stock/bond/gold return AND home-price change for that simulated year come
+  from the **same actual year** — a simulated 2008 pairs the real stock
+  crash with the real housing downturn, not a random mismatch
+- Result: "buying wins in 64% of outcomes" — with a real percentile range,
+  not false precision
 
 ![height:360px](assets/montecarlo.png)
 
@@ -135,11 +159,21 @@ Most calculators stop at property tax. This one models what actually shows up on
 
 ---
 
-## Share Any Scenario Instantly
+## Make It Yours, Share It, Keep It
 
-One click encodes every input — home price, rates, tax settings, chart tab — into a link.
+- **Property Address** — label exactly which listing you're analyzing
+- **Save as My Defaults** — set your own baseline, reset back to it any time
+- **Share Scenario** — one click encodes every input into a link; send
+  someone your exact numbers, no accounts or re-entering data
+- **Download PDF Report** — the full analysis, one click away
 
-**Send someone your exact numbers.** No accounts, no saving, no re-entering data.
+---
+
+## Take It Anywhere: Google Sheets
+
+The full model — deterministic engine and all 500 Monte Carlo trials — also
+runs as a live-formula Google Sheet. Paste in one script, and every number
+recalculates from your own inputs, no web app required.
 
 ---
 
