@@ -19,6 +19,7 @@ import {
 import {
   Building2,
   Check,
+  Download,
   Home,
   Info,
   KeyRound,
@@ -37,6 +38,9 @@ import { DEPRECIATION_PERIOD_YEARS, runSimulation } from './simulation.js'
 import { runMonteCarlo } from './monteCarlo.js'
 import { buildShareUrl, getStateFromUrl } from './shareState.js'
 import { loadUserDefaults, saveUserDefaults } from './userDefaults.js'
+import { buildCsv, downloadCsv } from './csvExport.js'
+import { MAX_SAVED_SCENARIOS, addScenario, loadScenarios, removeScenario } from './scenarios.js'
+import { runSensitivityAnalysis } from './sensitivity.js'
 import ScreenshotImport from './ScreenshotImport.jsx'
 import PrintReport from './PrintReport.jsx'
 import { formatCurrency } from './format.js'
@@ -200,6 +204,33 @@ const INVESTMENT_VEHICLES = {
   },
 }
 
+const SCENARIO_COLORS = ['#f59e0b', '#34d399', '#f472b6', '#818cf8']
+
+const CHART_TITLES = {
+  deterministic: '30-Year Net Worth Projection',
+  landlord: '30-Year Net Worth Projection',
+  montecarlo: '30-Year Net Worth Projection',
+  compare: 'Scenario Comparison',
+  sensitivity: 'Sensitivity Analysis',
+}
+
+function SensitivityTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200">
+      <p className="mb-1 font-semibold">{point.label}</p>
+      <p className="text-slate-400">
+        Low ({point.format(point.lowValue)}): {formatCurrency(point.lowAdvantage, false)}
+      </p>
+      <p className="text-slate-400">
+        High ({point.format(point.highValue)}): {formatCurrency(point.highAdvantage, false)}
+      </p>
+    </div>
+  )
+}
+
 // Read once at module load — a shared link's inputs/chartView seed the initial state below.
 const sharedState = getStateFromUrl()
 
@@ -257,6 +288,44 @@ export default function App() {
     return runMonteCarlo(debouncedInputs)
   }, [debouncedInputs, chartView])
 
+  // Sensitivity re-runs runSimulation 12x (6 inputs x low/high) — cheap per
+  // run, but still debounced and view-gated like Monte Carlo above so it
+  // doesn't add up while a slider is actively being dragged.
+  const sensitivityResult = useMemo(() => {
+    if (chartView !== 'sensitivity') return null
+    return runSensitivityAnalysis(debouncedInputs)
+  }, [debouncedInputs, chartView])
+
+  const [scenarios, setScenarios] = useState(() => loadScenarios())
+  const [scenarioNameInput, setScenarioNameInput] = useState('')
+
+  const handleSaveScenario = () => {
+    const name = scenarioNameInput.trim() || `Scenario ${scenarios.length + 1}`
+    setScenarios((prev) => addScenario(prev, name, inputs))
+    setScenarioNameInput('')
+  }
+
+  const handleDeleteScenario = (id) => setScenarios((prev) => removeScenario(prev, id))
+
+  // Only recomputes when the saved scenario list changes, not on every
+  // slider drag — the live "Current" line below reads straight from `data`.
+  const scenarioResults = useMemo(
+    () => scenarios.map((s) => ({ ...s, data: runSimulation(s.inputs).data })),
+    [scenarios],
+  )
+
+  const compareChartData = useMemo(() => {
+    if (chartView !== 'compare') return []
+    return data.map((d, i) => {
+      const row = { year: d.year, current: d.buyerNetWorth - d.renterNetWorth }
+      scenarioResults.forEach((s) => {
+        const yearData = s.data[i]
+        row[s.id] = yearData ? yearData.buyerNetWorth - yearData.renterNetWorth : null
+      })
+      return row
+    })
+  }, [chartView, data, scenarioResults])
+
   const isMonteCarlo = chartView === 'montecarlo'
   const mcFinalYear = monteCarlo?.data[monteCarlo.data.length - 1]
   const mcBreakEvenPoint = monteCarlo?.data.find((d) => d.buyerMedian > d.renterMedian)
@@ -268,6 +337,36 @@ export default function App() {
     displayBuyerNetWorth != null &&
     displayRenterNetWorth != null &&
     displayBuyerNetWorth > displayRenterNetWorth
+
+  // The PDF report always includes the Monte Carlo section now, regardless of
+  // which tab is on screen — Monte Carlo is the one genuinely expensive
+  // computation (500 trials), so it's computed fresh only when the report is
+  // actually requested, not reactively on every input change like `data` is.
+  const [pdfMonteCarlo, setPdfMonteCarlo] = useState(null)
+  const [printRequested, setPrintRequested] = useState(false)
+
+  const handleDownloadPdf = () => {
+    setPdfMonteCarlo(runMonteCarlo(inputs))
+    setPrintRequested(true)
+  }
+
+  // window.print() must wait for PrintReport to actually re-render with the
+  // fresh pdfMonteCarlo value — printing in the same tick as setState risks
+  // capturing the DOM before React commits the update.
+  useEffect(() => {
+    if (!printRequested || !pdfMonteCarlo) return
+    window.dispatchEvent(new Event('resize'))
+    window.print()
+    setPrintRequested(false)
+  }, [printRequested, pdfMonteCarlo])
+
+  const handleExportCsv = () => {
+    const slug = (propertyAddress || zipCode || 'scenario')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    downloadCsv(`rent-vs-buy-${slug || 'scenario'}.csv`, buildCsv(data))
+  }
 
   const handleShare = async () => {
     const url = buildShareUrl({ inputs, chartView })
@@ -310,7 +409,7 @@ export default function App() {
               it in the stock market and tracks a true 30-year net worth comparison.
             </p>
           </div>
-          <div className="flex flex-shrink-0 items-center gap-3">
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:gap-3">
             <a
               href={`${import.meta.env.BASE_URL}rent-vs-buy-pitch.pdf`}
               target="_blank"
@@ -321,14 +420,17 @@ export default function App() {
             </a>
             <button
               type="button"
-              onClick={() => {
-                // Nudge the hidden report's charts to remeasure before print layout kicks in.
-                window.dispatchEvent(new Event('resize'))
-                window.print()
-              }}
+              onClick={handleDownloadPdf}
               className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
             >
               <Printer className="h-4 w-4" /> Download PDF Report
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white"
+            >
+              <Download className="h-4 w-4" /> Export CSV
             </button>
             <button
               type="button"
@@ -744,41 +846,67 @@ export default function App() {
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg shadow-black/20">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-slate-300">30-Year Net Worth Projection</h3>
-                <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setChartView('deterministic')}
-                    className={`rounded-md px-3 py-1.5 font-medium transition ${
-                      chartView === 'deterministic'
-                        ? 'bg-indigo-500 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Deterministic
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartView('landlord')}
-                    className={`rounded-md px-3 py-1.5 font-medium transition ${
-                      chartView === 'landlord'
-                        ? 'bg-indigo-500 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Buy & Rent Out
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartView('montecarlo')}
-                    className={`rounded-md px-3 py-1.5 font-medium transition ${
-                      chartView === 'montecarlo'
-                        ? 'bg-indigo-500 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Monte Carlo
-                  </button>
+                <h3 className="text-sm font-semibold text-slate-300">{CHART_TITLES[chartView]}</h3>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setChartView('deterministic')}
+                      className={`rounded-md px-3 py-1.5 font-medium transition ${
+                        chartView === 'deterministic'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Deterministic
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartView('landlord')}
+                      className={`rounded-md px-3 py-1.5 font-medium transition ${
+                        chartView === 'landlord'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Buy & Rent Out
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartView('montecarlo')}
+                      className={`rounded-md px-3 py-1.5 font-medium transition ${
+                        chartView === 'montecarlo'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Monte Carlo
+                    </button>
+                  </div>
+                  <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setChartView('compare')}
+                      className={`rounded-md px-3 py-1.5 font-medium transition ${
+                        chartView === 'compare'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Compare Scenarios
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartView('sensitivity')}
+                      className={`rounded-md px-3 py-1.5 font-medium transition ${
+                        chartView === 'sensitivity'
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Sensitivity Analysis
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -904,6 +1032,74 @@ export default function App() {
                     paired. Both are re-centered to your{' '}
                     {INVESTMENT_VEHICLES[inputs.investmentVehicle].label} and Home Appreciation
                     sliders respectively.
+                  </p>
+                </div>
+              )}
+
+              {chartView === 'compare' && (
+                <div className="mb-3 space-y-3 text-xs text-slate-400">
+                  <p>
+                    Save snapshots of different input combinations to compare how the 30-year
+                    Buying Advantage (Buyer Net Worth minus Renter Net Worth) plays out under
+                    each. Your current live inputs always show as a dashed line, so you can see
+                    how new tweaks compare to what you've saved.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Scenario name (optional)"
+                      value={scenarioNameInput}
+                      onChange={(e) => setScenarioNameInput(e.target.value)}
+                      className="w-48 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-white placeholder-slate-500 focus:border-indigo-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveScenario}
+                      disabled={scenarios.length >= MAX_SAVED_SCENARIOS}
+                      className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 font-medium text-slate-200 transition hover:border-indigo-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Save Current as Scenario
+                    </button>
+                    {scenarios.length >= MAX_SAVED_SCENARIOS && (
+                      <span className="text-amber-400">
+                        Delete one below to save a new scenario (max {MAX_SAVED_SCENARIOS}).
+                      </span>
+                    )}
+                  </div>
+                  {scenarios.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {scenarios.map((s, i) => (
+                        <span
+                          key={s.id}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-950 px-3 py-1"
+                        >
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: SCENARIO_COLORS[i % SCENARIO_COLORS.length] }}
+                          />
+                          {s.name}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteScenario(s.id)}
+                            className="text-slate-500 hover:text-red-400"
+                            aria-label={`Delete ${s.name}`}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {chartView === 'sensitivity' && (
+                <div className="mb-3 text-xs text-slate-400">
+                  <p>
+                    Each bar shows how the 30-year Buying Advantage (Buyer Net Worth minus Renter
+                    Net Worth) would change if that one input were set to its low or high test
+                    value, holding everything else at your current settings. This is one-input-
+                    at-a-time sensitivity — it doesn't capture how inputs might move together.
                   </p>
                 </div>
               )}
@@ -1081,6 +1277,87 @@ export default function App() {
                         />
                       )}
                     </LineChart>
+                  ) : chartView === 'compare' ? (
+                    <LineChart data={compareChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis
+                        dataKey="year"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        label={{ value: 'Years', position: 'insideBottom', offset: -3, fill: '#64748b' }}
+                      />
+                      <YAxis
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        tickFormatter={(v) => formatCurrency(v)}
+                        width={70}
+                      />
+                      <Tooltip
+                        formatter={tooltipFormatter}
+                        labelFormatter={(year) => `Year ${year}`}
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '0.75rem',
+                          color: '#e2e8f0',
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} />
+                      <ReferenceLine y={0} stroke="#475569" />
+                      <Line
+                        type="monotone"
+                        dataKey="current"
+                        name="Current (unsaved)"
+                        stroke="#e2e8f0"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={false}
+                      />
+                      {scenarioResults.map((s, i) => (
+                        <Line
+                          key={s.id}
+                          type="monotone"
+                          dataKey={s.id}
+                          name={s.name}
+                          stroke={SCENARIO_COLORS[i % SCENARIO_COLORS.length]}
+                          strokeWidth={2.5}
+                          dot={false}
+                        />
+                      ))}
+                    </LineChart>
+                  ) : chartView === 'sensitivity' ? (
+                    <BarChart
+                      layout="vertical"
+                      data={sensitivityResult?.rows ?? []}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis
+                        type="number"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        tickFormatter={(v) => formatCurrency(v)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        width={110}
+                      />
+                      <Tooltip content={<SensitivityTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} />
+                      {sensitivityResult && (
+                        <ReferenceLine
+                          x={sensitivityResult.baselineAdvantage}
+                          stroke="#f59e0b"
+                          strokeDasharray="4 4"
+                          label={{ value: 'Current', fill: '#f59e0b', fontSize: 11, position: 'top' }}
+                        />
+                      )}
+                      <Bar dataKey="lowAdvantage" name="Low test value" fill="#f472b6" />
+                      <Bar dataKey="highAdvantage" name="High test value" fill="#818cf8" />
+                    </BarChart>
                   ) : (
                     <ComposedChart
                       data={monteCarlo?.data ?? []}
@@ -1178,8 +1455,7 @@ export default function App() {
         zipCode={zipCode}
         zipMatch={zipMatch}
         propertyAddress={propertyAddress}
-        monteCarlo={monteCarlo}
-        chartView={chartView}
+        monteCarlo={pdfMonteCarlo}
       />
     </div>
   )

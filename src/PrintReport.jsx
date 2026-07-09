@@ -1,6 +1,9 @@
 import {
   Area,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
@@ -54,7 +57,6 @@ export default function PrintReport({
   zipMatch,
   propertyAddress,
   monteCarlo,
-  chartView,
 }) {
   const buyerWinsAt30 = finalYear && finalYear.buyerNetWorth > finalYear.renterNetWorth
   const vehicle = VEHICLE_LABELS[inputs.investmentVehicle] ?? VEHICLE_LABELS.stocks
@@ -109,7 +111,7 @@ export default function PrintReport({
 
       <section className="mb-6" style={{ breakInside: 'avoid' }}>
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">
-          30-Year Net Worth Projection
+          Deterministic — Net Worth
         </h2>
         <div className="h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -149,62 +151,164 @@ export default function PrintReport({
         </div>
       </section>
 
-      {chartView === 'landlord' && (
-        <section className="mb-6" style={{ breakInside: 'avoid' }}>
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">
-            Buy &amp; Rent Out
-          </h2>
-          <p className="mb-3 text-sm">
-            Models buying this property and renting it out at the same Monthly Rent used for the
-            renter comparison, reduced by the Occupancy Rate and Annual Management Fee below.
-            Assumes straight-line depreciation over {DEPRECIATION_PERIOD_YEARS} years on the
-            building only (Home Price minus Land Value), with standard depreciation-recapture
-            rules at sale and no primary-residence tax exclusion, since this is a rental property.
-          </p>
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="year" stroke="#475569" tick={{ fill: '#475569', fontSize: 11 }} />
-                <YAxis
-                  stroke="#475569"
-                  tick={{ fill: '#475569', fontSize: 11 }}
-                  tickFormatter={(v) => formatCurrency(v)}
-                  width={65}
-                />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line
-                  type="monotone"
-                  dataKey="buyerNetWorth"
-                  name="Buying (Home Equity)"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="renterNetWorth"
-                  name={`Renting (${vehicle.portfolio})`}
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="landlordNetWorth"
-                  name="Buy & Rent Out"
-                  stroke="#ec4899"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      )}
+      <section className="mb-6" style={{ breakInside: 'avoid' }}>
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">
+          Deterministic — Cash Flow
+        </h2>
+        <p className="mb-3 text-sm">
+          Each year's total difference between the buyer's monthly cost and rent. Positive means
+          buying cost more that month, so the difference got invested; negative means rent cost
+          more, and that shortfall was drawn from the same portfolio instead of an untracked
+          outside source.
+        </p>
+        <div className="h-[280px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="year" stroke="#475569" tick={{ fill: '#475569', fontSize: 11 }} />
+              <YAxis
+                stroke="#475569"
+                tick={{ fill: '#475569', fontSize: 11 }}
+                tickFormatter={(v) => formatCurrency(v)}
+                width={65}
+              />
+              <ReferenceLine y={0} stroke="#94a3b8" />
+              <Bar dataKey="renterCashFlow" name="Renter Cash Flow" isAnimationActive={false}>
+                {data.map((d) => (
+                  <Cell key={d.year} fill={d.renterCashFlow >= 0 ? '#059669' : '#dc2626'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="mb-6" style={{ breakInside: 'avoid' }}>
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">
+          Buy &amp; Rent Out — Net Worth
+        </h2>
+        <p className="mb-3 text-sm">
+          Models buying this property and renting it out at the same Monthly Rent used for the
+          renter comparison, reduced by the Occupancy Rate and Annual Management Fee below.
+          Assumes straight-line depreciation over {DEPRECIATION_PERIOD_YEARS} years on the
+          building only (Home Price minus Land Value), with standard depreciation-recapture
+          rules at sale and no primary-residence tax exclusion, since this is a rental property.
+        </p>
+        <div className="h-[280px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="year" stroke="#475569" tick={{ fill: '#475569', fontSize: 11 }} />
+              <YAxis
+                stroke="#475569"
+                tick={{ fill: '#475569', fontSize: 11 }}
+                tickFormatter={(v) => formatCurrency(v)}
+                width={65}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Line
+                type="monotone"
+                dataKey="buyerNetWorth"
+                name="Buying (Home Equity)"
+                stroke="#6366f1"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="renterNetWorth"
+                name={`Renting (${vehicle.portfolio})`}
+                stroke="#10b981"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="landlordNetWorth"
+                name="Buy & Rent Out"
+                stroke="#ec4899"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="mb-6" style={{ breakInside: 'avoid' }}>
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">
+          Buy &amp; Rent Out — Cash Flow
+        </h2>
+        <p className="mb-3 text-sm">
+          Each year's net cash flow from the rental — rent minus mortgage, tax, insurance,
+          maintenance, and management fee, net of the tax effect (including its one-year lag).
+          Negative months draw down Invested Surplus (below) at the same rate a contribution
+          would have earned.
+        </p>
+        <div className="h-[280px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="year" stroke="#475569" tick={{ fill: '#475569', fontSize: 11 }} />
+              <YAxis
+                stroke="#475569"
+                tick={{ fill: '#475569', fontSize: 11 }}
+                tickFormatter={(v) => formatCurrency(v)}
+                width={65}
+              />
+              <ReferenceLine y={0} stroke="#94a3b8" />
+              <Bar dataKey="landlordCashFlow" name="Annual Cash Flow" isAnimationActive={false}>
+                {data.map((d) => (
+                  <Cell key={d.year} fill={d.landlordCashFlow >= 0 ? '#059669' : '#dc2626'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="mb-6" style={{ breakInside: 'avoid' }}>
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">
+          Buy &amp; Rent Out — Equity vs Investment
+        </h2>
+        <p className="mb-3 text-sm">
+          Property Equity is the after-tax value if sold that year; Invested Surplus is the
+          after-tax value of reinvested cash flow (see Cash Flow above) — together they sum to
+          the Buy &amp; Rent Out net worth shown above.
+        </p>
+        <div className="h-[280px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="year" stroke="#475569" tick={{ fill: '#475569', fontSize: 11 }} />
+              <YAxis
+                stroke="#475569"
+                tick={{ fill: '#475569', fontSize: 11 }}
+                tickFormatter={(v) => formatCurrency(v)}
+                width={65}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar
+                dataKey="landlordPropertyEquity"
+                name="Property Equity"
+                stackId="landlord"
+                fill="#6366f1"
+                isAnimationActive={false}
+              />
+              <Bar
+                dataKey="landlordInvestedSurplus"
+                name="Invested Surplus"
+                stackId="landlord"
+                fill="#ec4899"
+                isAnimationActive={false}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
 
       {monteCarlo && (
         <section className="mb-6" style={{ breakInside: 'avoid' }}>
