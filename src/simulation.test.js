@@ -219,9 +219,9 @@ describe('runSimulation', () => {
 
       it('matches the current expected landlordNetWorth baseline (snapshot regression guard)', () => {
         const { data } = runSimulation(baseInputs)
-        expect(data[0].landlordNetWorth).toBe(208581)
-        expect(data[14].landlordNetWorth).toBe(577380)
-        expect(data[29].landlordNetWorth).toBe(1595273)
+        expect(data[0].landlordNetWorth).toBe(69481)
+        expect(data[14].landlordNetWorth).toBe(226186)
+        expect(data[29].landlordNetWorth).toBe(678243)
       })
 
       it('reports negative cash flow in year 1 and improves as rent inflates', () => {

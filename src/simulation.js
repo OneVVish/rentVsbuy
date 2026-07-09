@@ -97,8 +97,13 @@ export function runSimulation(inputs) {
   // to a tenant instead of lived in. Modeled on Schedule E (rental income/expense),
   // not the buyer's Schedule A itemized deduction above — different tax treatment,
   // computed in parallel from the same shared homeValue/loanBalance trajectory.
-  let landlordPortfolio = downPayment
-  let landlordCostBasis = downPayment
+  //
+  // Starts at 0, NOT downPayment — unlike the renter, the landlord DOES buy the
+  // house, so their down payment is already spent and already reflected in
+  // landlordPropertyEquity below. Seeding this at downPayment too would double-
+  // count it as a second, imaginary pot of cash the landlord doesn't actually have.
+  let landlordPortfolio = 0
+  let landlordCostBasis = 0
   let accumulatedDepreciation = 0
   let monthlyLandlordTaxEffect = 0
   let yearRentalIncome = 0
